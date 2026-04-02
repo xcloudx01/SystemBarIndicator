@@ -8,13 +8,13 @@ namespace SystemBarIndicator.Models
         public float GpuTemperature { get; set; }
         public float GpuMemoryUsed { get; set; }
         public float GpuMemoryTotal { get; set; }
-        public float RamUsagePercent { get; set; }
+        public float RamUsage { get; set; }
         public long RamUsed { get; set; }
         public long RamTotal { get; set; }
-        public float DiskReadSpeed { get; set; }
-        public float DiskWriteSpeed { get; set; }
+        public float DiskRead { get; set; }
+        public float DiskWrite { get; set; }
         public float DiskUsagePercent { get; set; }
-        public float NetworkDownloadSpeed { get; set; }
-        public float NetworkUploadSpeed { get; set; }
+        public float NetDown { get; set; }
+        public float NetUp { get; set; }
     }
 }

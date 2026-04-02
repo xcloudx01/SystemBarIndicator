@@ -7,6 +7,7 @@ using System.Net.NetworkInformation;
 using System.Collections.Generic;
 using System.Linq;
 using LibreHardwareMonitor.Hardware;
+using SystemBarIndicator.Models;
 
 namespace SystemBarIndicator
 {
@@ -85,6 +86,8 @@ namespace SystemBarIndicator
         private Timer _timer;
         private NotifyIcon _trayIcon;
         private string _statusText = "Loading...";
+        private DataHistory _history;
+        private GraphOverlay? _graphOverlay;
 
         private float _cpuUsage;
         private float _cpuTemp;
@@ -95,6 +98,22 @@ namespace SystemBarIndicator
         private float _diskWrite;
         private float _netDown;
         private float _netUp;
+
+        private SensorData GetCurrentData()
+        {
+            return new SensorData
+            {
+                CpuUsage = _cpuUsage,
+                CpuTemperature = _cpuTemp,
+                GpuUsage = _gpuUsage,
+                GpuTemperature = _gpuTemp,
+                RamUsage = _ramUsage,
+                DiskRead = _diskRead,
+                DiskWrite = _diskWrite,
+                NetDown = _netDown,
+                NetUp = _netUp
+            };
+        }
 
         public MainForm()
         {
@@ -123,6 +142,8 @@ namespace SystemBarIndicator
 
             InitLibreHardwareMonitor();
 
+            _history = new DataHistory(120);
+
             this.FormBorderStyle = FormBorderStyle.None;
             this.ShowInTaskbar = true;
             this.TopMost = true;
@@ -130,7 +151,11 @@ namespace SystemBarIndicator
             this.Opacity = 0.92;
             this.Size = new Size(520, 32);
             this.StartPosition = FormStartPosition.Manual;
-            this.DoubleBuffered = true;
+            this.LocationChanged += (s, e) =>
+            {
+                if (_graphOverlay != null && !_graphOverlay.IsDisposed)
+                    _graphOverlay.PositionAboveParent();
+            };
 
             _timer = new Timer { Interval = 1000 };
             _timer.Tick += TimerTick;
@@ -142,8 +167,10 @@ namespace SystemBarIndicator
                 Text = "SystemBar Indicator",
                 Icon = CreateIcon()
             };
+            _trayIcon.MouseClick += TrayIconClick;
 
             var menu = new ContextMenuStrip();
+            menu.Items.Add("Graphs", null, (s, e) => OpenGraphOverlay());
             menu.Items.Add("Reset Position", null, (s, e) => PositionOnTaskbar());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Exit", null, (s, e) => { _trayIcon.Visible = false; Application.Exit(); });
@@ -365,8 +392,52 @@ namespace SystemBarIndicator
                     _cpuUsage, _ramUsage, _gpuUsage);
 
                 this.Invalidate();
+
+                _history.Add(new DataPoint
+                {
+                    Timestamp = DateTime.Now,
+                    CpuUsage = _cpuUsage,
+                    CpuTemperature = _cpuTemp,
+                    GpuUsage = _gpuUsage,
+                    GpuTemperature = _gpuTemp,
+                    RamUsage = _ramUsage,
+                    DiskRead = _diskRead,
+                    DiskWrite = _diskWrite,
+                    NetDown = _netDown,
+                    NetUp = _netUp
+                });
             }
             catch { }
+        }
+
+        private void OpenGraphOverlay()
+        {
+            if (_graphOverlay == null || _graphOverlay.IsDisposed)
+            {
+                _graphOverlay = new GraphOverlay(_history, GetCurrentData, this);
+                _graphOverlay.PositionAboveParent();
+                _graphOverlay.FormClosed += (s, e) => { _graphOverlay = null; };
+                _graphOverlay.Show();
+            }
+            else
+            {
+                _graphOverlay.Close();
+                _graphOverlay = null;
+            }
+        }
+
+        private void TrayIconClick(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                OpenGraphOverlay();
+            }
+        }
+
+        protected override void OnClick(EventArgs e)
+        {
+            base.OnClick(e);
+            OpenGraphOverlay();
         }
 
         protected override void OnPaint(PaintEventArgs e)
