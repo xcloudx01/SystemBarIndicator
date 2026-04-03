@@ -13,22 +13,19 @@ namespace SystemBarIndicator
         private readonly Func<SensorData> _getCurrentData;
         private readonly Form _parentForm;
         private Timer _updateTimer;
-        private int _selectedIndex = 0;
+        private Timer _positionTimer;
 
-        private string[] _chartNames = { "CPU", "RAM", "GPU", "NET" };
-        private Color[] _lineColors = {
-            Color.FromArgb(99, 179, 237),
-            Color.FromArgb(129, 140, 248),
-            Color.FromArgb(72, 187, 120),
-            Color.FromArgb(237, 137, 54)
-        };
-        private Color[] _fillColors = {
-            Color.FromArgb(52, 120, 180),
-            Color.FromArgb(99, 110, 200),
-            Color.FromArgb(56, 150, 96),
-            Color.FromArgb(200, 110, 40)
-        };
-        private Func<DataPoint, float>[] _getValueFuncs;
+        private class ChartConfig
+        {
+            public string Title;
+            public Color LineColor;
+            public Func<DataPoint, float> GetValue;
+            public Func<SensorData, string> FormatValue;
+            public float MaxDefault;
+            public bool ShowOnlyIfPositive;
+        }
+
+        private ChartConfig[] _charts;
 
         public GraphOverlay(DataHistory history, Func<SensorData> getCurrentData, Form parentForm)
         {
@@ -36,12 +33,16 @@ namespace SystemBarIndicator
             _getCurrentData = getCurrentData;
             _parentForm = parentForm;
 
-            _getValueFuncs = new Func<DataPoint, float>[]
+            _charts = new ChartConfig[]
             {
-                p => p.CpuUsage,
-                p => p.RamUsage,
-                p => p.GpuUsage,
-                p => p.NetDown
+                new ChartConfig { Title = "CPU", LineColor = Color.FromArgb(99, 179, 237), GetValue = p => p.CpuUsage, FormatValue = d => string.Format("{0:F0}%", d.CpuUsage), MaxDefault = 100, ShowOnlyIfPositive = false },
+                new ChartConfig { Title = "CPU Temp", LineColor = Color.FromArgb(244, 143, 177), GetValue = p => p.CpuTemperature, FormatValue = d => string.Format("{0:F0}C", d.CpuTemperature), MaxDefault = 100, ShowOnlyIfPositive = true },
+                new ChartConfig { Title = "RAM", LineColor = Color.FromArgb(129, 140, 248), GetValue = p => p.RamUsage, FormatValue = d => string.Format("{0:F0}%", d.RamUsage), MaxDefault = 100, ShowOnlyIfPositive = false },
+                new ChartConfig { Title = "GPU", LineColor = Color.FromArgb(72, 187, 120), GetValue = p => p.GpuUsage, FormatValue = d => string.Format("{0:F0}%", d.GpuUsage), MaxDefault = 100, ShowOnlyIfPositive = true },
+                new ChartConfig { Title = "GPU Temp", LineColor = Color.FromArgb(255, 167, 38), GetValue = p => p.GpuTemperature, FormatValue = d => string.Format("{0:F0}C", d.GpuTemperature), MaxDefault = 100, ShowOnlyIfPositive = true },
+                new ChartConfig { Title = "Disk R/W", LineColor = Color.FromArgb(171, 71, 188), GetValue = p => p.DiskRead + p.DiskWrite, FormatValue = d => string.Format("{0:F0} / {1:F0} MB", d.DiskRead, d.DiskWrite), MaxDefault = 500, ShowOnlyIfPositive = false },
+                new ChartConfig { Title = "Net DL", LineColor = Color.FromArgb(237, 137, 54), GetValue = p => p.NetDown, FormatValue = d => FormatSpeed(d.NetDown), MaxDefault = 10000, ShowOnlyIfPositive = false },
+                new ChartConfig { Title = "Net UL", LineColor = Color.FromArgb(38, 198, 218), GetValue = p => p.NetUp, FormatValue = d => FormatSpeed(d.NetUp), MaxDefault = 10000, ShowOnlyIfPositive = false }
             };
 
             this.FormBorderStyle = FormBorderStyle.None;
@@ -49,30 +50,62 @@ namespace SystemBarIndicator
             this.TopMost = true;
             this.BackColor = Color.FromArgb(20, 20, 28);
             this.Opacity = 0.95;
-            this.Size = new Size(parentForm.Width, 140);
             this.StartPosition = FormStartPosition.Manual;
             this.DoubleBuffered = true;
+            this.SetStyle(ControlStyles.ResizeRedraw | ControlStyles.OptimizedDoubleBuffer, true);
+
+            UpdateSize();
 
             _updateTimer = new Timer { Interval = 500 };
             _updateTimer.Tick += (s, e) => this.Invalidate();
             _updateTimer.Start();
 
-            this.MouseDown += (s, e) =>
+            _positionTimer = new Timer { Interval = 100 };
+            _positionTimer.Tick += (s, e) => PositionAboveParent();
+            _positionTimer.Start();
+        }
+
+        private void UpdateSize()
+        {
+            int chartHeight = 72;
+            int padding = 8;
+            int gap = 4;
+            int visibleCharts = GetVisibleChartCount();
+            int totalHeight = padding * 2 + visibleCharts * chartHeight + (visibleCharts - 1) * gap;
+            this.Size = new Size(_parentForm.Width, Math.Min(totalHeight, 650));
+        }
+
+        private int GetVisibleChartCount()
+        {
+            int count = 0;
+            foreach (var c in _charts)
             {
-                int chartW = (this.Width - 20) / 4;
-                int idx = e.X / chartW;
-                if (idx >= 0 && idx < 4)
+                if (!c.ShowOnlyIfPositive) { count++; continue; }
+                var data = _history.GetPoints();
+                bool hasAny = false;
+                int checkCount = Math.Min(10, data.Count);
+                for (int i = data.Count - 1; i >= data.Count - checkCount; i--)
                 {
-                    _selectedIndex = idx;
-                    this.Invalidate();
+                    if (i >= 0 && c.GetValue(data[i]) > 0)
+                    {
+                        hasAny = true;
+                        break;
+                    }
                 }
-            };
+                if (hasAny) count++;
+            }
+            return count;
         }
 
         public void PositionAboveParent()
         {
-            this.Location = new Point(_parentForm.Left, _parentForm.Top - this.Height - 4);
-            this.Size = new Size(_parentForm.Width, 140);
+            UpdateSize();
+            int newY = _parentForm.Top - this.Height - 4;
+            if (newY < 0) newY = 0;
+            if (this.Location.Y != newY || this.Width != _parentForm.Width)
+            {
+                this.Location = new Point(_parentForm.Left, newY);
+            }
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -81,130 +114,121 @@ namespace SystemBarIndicator
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
+            int chartHeight = 72;
             int padding = 8;
-            int chartGap = 6;
-            int chartW = (this.Width - padding * 2 - chartGap * 3) / 4;
-            int chartH = this.Height - padding * 2;
+            int gap = 4;
+            int y = padding;
 
-            for (int i = 0; i < 4; i++)
+            foreach (var chart in _charts)
             {
-                int x = padding + i * (chartW + chartGap);
-                DrawChart(e.Graphics, _chartNames[i], _history.GetPoints(), _getValueFuncs[i],
-                    _lineColors[i], _fillColors[i], x, padding, chartW, chartH, i == _selectedIndex);
+                if (chart.ShowOnlyIfPositive)
+                {
+                    var data = _history.GetPoints();
+                    bool hasAny = false;
+                    int checkCount = Math.Min(10, data.Count);
+                    for (int i = data.Count - 1; i >= data.Count - checkCount; i--)
+                    {
+                        if (i >= 0 && chart.GetValue(data[i]) > 0)
+                        {
+                            hasAny = true;
+                            break;
+                        }
+                    }
+                    if (!hasAny) continue;
+                }
+
+                DrawChart(e.Graphics, chart, padding, y, this.Width - padding * 2, chartHeight);
+                y += chartHeight + gap;
             }
         }
 
-        private void DrawChart(Graphics g, string title, List<DataPoint> data, Func<DataPoint, float> getValue,
-            Color lineColor, Color fillColor, int x, int y, int w, int h, bool isSelected)
+        private void DrawChart(Graphics g, ChartConfig chart, int x, int y, int w, int h)
         {
-            // Card background
-            int radius = isSelected ? 10 : 8;
-            using (var path = CreateRoundRect(x, y, w, h, radius))
-            using (var brush = new SolidBrush(isSelected ? Color.FromArgb(35, 35, 50) : Color.FromArgb(28, 28, 38)))
+            using (var path = CreateRoundRect(x, y, w, h, 8))
+            using (var brush = new SolidBrush(Color.FromArgb(28, 28, 38)))
             {
                 g.FillPath(brush, path);
             }
 
-            // Border for selected
-            if (isSelected)
-            {
-                using (var path = CreateRoundRect(x, y, w, h, radius))
-                using (var pen = new Pen(Color.FromArgb(60, 60, 80), 1))
-                {
-                    g.DrawPath(pen, path);
-                }
-            }
-
-            // Title
-            using (var titleFont = new Font("Segoe UI", 8f, FontStyle.Bold))
-            using (var titleBrush = new SolidBrush(Color.FromArgb(160, 160, 180)))
-            {
-                g.DrawString(title, titleFont, titleBrush, x + 8, y + 6);
-            }
-
-            // Current value
+            var data = _history.GetPoints();
             float currentVal = 0;
             if (data.Count > 0)
-                currentVal = getValue(data[data.Count - 1]);
+                currentVal = chart.GetValue(data[data.Count - 1]);
 
-            string displayVal = title == "NET" ? FormatSpeed(currentVal) : string.Format("{0:F0}%", currentVal);
-            using (var valFont = new Font("Segoe UI", 14f, FontStyle.Bold))
-            using (var valBrush = new SolidBrush(lineColor))
+            string displayVal = chart.FormatValue(_getCurrentData());
+            using (var titleFont = new Font("Segoe UI", 8.5f, FontStyle.Bold))
+            using (var titleBrush = new SolidBrush(Color.FromArgb(150, 150, 170)))
             {
-                var size = g.MeasureString(displayVal, valFont);
-                g.DrawString(displayVal, valFont, valBrush, x + w - size.Width - 8, y + 4);
+                g.DrawString(chart.Title, titleFont, titleBrush, x + 10, y + 6);
             }
 
-            // Chart area
-            int chartX = x + 6;
-            int chartY = y + 30;
-            int chartW2 = w - 12;
-            int chartH2 = h - 38;
+            using (var valFont = new Font("Segoe UI", 13f, FontStyle.Bold))
+            using (var valBrush = new SolidBrush(chart.LineColor))
+            {
+                var size = g.MeasureString(displayVal, valFont);
+                g.DrawString(displayVal, valFont, valBrush, x + w - size.Width - 10, y + 4);
+            }
+
+            int chartX = x + 10;
+            int chartY = y + 24;
+            int chartW = w - 20;
+            int chartH = h - 32;
 
             if (data.Count < 2) return;
 
-            float maxVal = title == "NET" ? 1000 : 100;
-            if (title == "NET")
+            float maxVal = chart.MaxDefault;
+            foreach (var p in data)
             {
-                foreach (var p in data)
-                {
-                    float v = getValue(p);
-                    if (v > maxVal) maxVal = v;
-                }
-                maxVal = Math.Max(maxVal, 10);
+                float v = chart.GetValue(p);
+                if (v > maxVal) maxVal = v;
             }
+            maxVal = Math.Max(maxVal, 1);
 
-            // Grid lines
-            using (var gridPen = new Pen(Color.FromArgb(40, 40, 55), 1))
+            using (var gridPen = new Pen(Color.FromArgb(38, 38, 52), 1))
             {
                 for (int i = 1; i <= 3; i++)
                 {
-                    int gy = chartY + (int)(chartH2 * i / 4f);
-                    g.DrawLine(gridPen, chartX, gy, chartX + chartW2, gy);
+                    int gy = chartY + (int)(chartH * i / 4f);
+                    g.DrawLine(gridPen, chartX, gy, chartX + chartW, gy);
                 }
             }
 
-            // Build points
             var pts = new List<PointF>();
-            float stepX = (float)chartW2 / Math.Max(data.Count - 1, 1);
+            float stepX = (float)chartW / Math.Max(data.Count - 1, 1);
             for (int i = 0; i < data.Count; i++)
             {
-                float val = getValue(data[i]);
+                float val = chart.GetValue(data[i]);
                 float normalized = Math.Max(0, Math.Min(val / maxVal, 1f));
-                pts.Add(new PointF(chartX + i * stepX, chartY + chartH2 - (normalized * chartH2)));
+                pts.Add(new PointF(chartX + i * stepX, chartY + chartH - (normalized * chartH)));
             }
 
             if (pts.Count >= 2)
             {
-                // Fill gradient
-                using (var fillPath = CreateSmoothFillPath(pts, chartX, chartY + chartH2))
+                using (var fillPath = CreateSmoothFillPath(pts, chartX, chartY + chartH))
                 using (var gradientBrush = new LinearGradientBrush(
-                    new PointF(0, chartY), new PointF(0, chartY + chartH2),
-                    Color.FromArgb(50, lineColor.R, lineColor.G, lineColor.B),
-                    Color.FromArgb(3, lineColor.R, lineColor.G, lineColor.B)))
+                    new PointF(0, chartY), new PointF(0, chartY + chartH),
+                    Color.FromArgb(45, chart.LineColor.R, chart.LineColor.G, chart.LineColor.B),
+                    Color.FromArgb(3, chart.LineColor.R, chart.LineColor.G, chart.LineColor.B)))
                 {
                     g.FillPath(gradientBrush, fillPath);
                 }
 
-                // Smooth line
                 using (var linePath = CreateSmoothLinePath(pts))
-                using (var linePen = new Pen(lineColor, 2f))
+                using (var linePen = new Pen(chart.LineColor, 2f))
                 {
                     linePen.LineJoin = LineJoin.Round;
                     g.DrawPath(linePen, linePath);
                 }
 
-                // Glow
                 using (var linePath = CreateSmoothLinePath(pts))
-                using (var glowPen = new Pen(Color.FromArgb(35, lineColor.R, lineColor.G, lineColor.B), 5f))
+                using (var glowPen = new Pen(Color.FromArgb(30, chart.LineColor.R, chart.LineColor.G, chart.LineColor.B), 5f))
                 {
                     glowPen.LineJoin = LineJoin.Round;
                     g.DrawPath(glowPen, linePath);
                 }
 
-                // End dot
                 var lastPt = pts[pts.Count - 1];
-                using (var dotBrush = new SolidBrush(lineColor))
+                using (var dotBrush = new SolidBrush(chart.LineColor))
                 {
                     g.FillEllipse(dotBrush, lastPt.X - 3, lastPt.Y - 3, 6, 6);
                 }
@@ -265,12 +289,12 @@ namespace SystemBarIndicator
             return string.Format("{0:F0}B", kbps * 1024);
         }
 
-        public int SelectedIndex => _selectedIndex;
-
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             _updateTimer.Stop();
             _updateTimer.Dispose();
+            _positionTimer.Stop();
+            _positionTimer.Dispose();
             base.OnFormClosing(e);
         }
     }

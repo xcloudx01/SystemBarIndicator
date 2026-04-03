@@ -84,6 +84,7 @@ namespace SystemBarIndicator
         private bool _lhmAvailable;
 
         private Timer _timer;
+        private Timer _topmostTimer;
         private NotifyIcon _trayIcon;
         private string _statusText = "Loading...";
         private DataHistory _history;
@@ -160,6 +161,10 @@ namespace SystemBarIndicator
             _timer = new Timer { Interval = 1000 };
             _timer.Tick += TimerTick;
             _timer.Start();
+
+            _topmostTimer = new Timer { Interval = 200 };
+            _topmostTimer.Tick += (s, e) => ForceTopMost();
+            _topmostTimer.Start();
 
             _trayIcon = new NotifyIcon
             {
@@ -568,6 +573,7 @@ namespace SystemBarIndicator
                 _lhmComputer.Close();
             _trayIcon.Dispose();
             _timer.Dispose();
+            _topmostTimer.Dispose();
             base.OnFormClosing(e);
         }
     }
