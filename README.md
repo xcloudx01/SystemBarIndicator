@@ -22,13 +22,18 @@
 | Runtime | .NET 10 (`net10.0-windows`) |
 | Графика | GDI+ (`System.Drawing`) |
 | Загрузка/RAM/диск/сеть | PerformanceCounter, `GlobalMemoryStatusEx`, `NetworkInterface` |
-| Температуры и GPU | [LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) 0.9.4 |
+| Температуры и GPU | [LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) 0.9.6 |
+| Доступ к датчикам CPU | [PawnIO](https://pawnio.eu) — подписанный драйвер ядра (вместо уязвимого WinRing0) |
 
 ## Требования
 
 - Windows 10 (Build 19041+) или Windows 11
 - .NET 10 SDK
-- Для чтения температур CPU/GPU может потребоваться запуск с правами администратора (зависит от драйверов оборудования)
+- Запуск с правами администратора — для чтения температур (загрузка драйвера датчиков)
+- **PawnIO** — для температуры CPU. Это подписанный драйвер ядра, который LibreHardwareMonitor 0.9.5+
+  использует вместо уязвимого WinRing0 (его помечает Microsoft Defender). Установить один раз
+  с [pawnio.eu](https://pawnio.eu). Без PawnIO всё работает, кроме температуры CPU — и, что важно,
+  уязвимый драйвер не загружается.
 
 ## Структура проекта
 

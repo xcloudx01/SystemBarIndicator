@@ -42,6 +42,9 @@ dotnet run --project src/SystemBarIndicator.App   # запуск приложе�
 - **Опрос данных.** `MainForm._timer` (1 c) обновляет единый снимок `SensorData _current`
   через классы `Sensors`, затем кладёт точку в `DataHistory` (кольцевой буфер на 120 точек).
   `HardwareSensor.Update()` обязателен раз за тик — без него LHM отдаёт пустые значения.
+- **Температуры и PawnIO.** LHM 0.9.6 читает датчики CPU через подписанный драйвер ядра
+  **PawnIO** (вместо уязвимого WinRing0, который помечает Microsoft Defender). PawnIO ставится
+  отдельно (pawnio.eu); без него температура CPU недоступна, но уязвимый драйвер не грузится.
 - **Один экземпляр.** `Program.Main` удерживает именованный `Mutex`
   (`Local\SystemBarIndicator_SingleInstance`); повторный запуск сразу завершается.
 - **Always-on-top.** Удержание поверх — через модификацию z-order в `WM_WINDOWPOSCHANGING`
@@ -61,3 +64,8 @@ dotnet run --project src/SystemBarIndicator.App   # запуск приложе�
 - Сборка должна оставаться без предупреждений.
 - Логи приложения: `%LOCALAPPDATA%\SystemBarIndicator\app.log`.
 - `ROADMAP.md` / `SUGGESTIONS.md` — опережающие планы, а не описание текущего кода.
+- **Развёртывание для рабочего стола.** `LibreHardwareMonitorLib` 0.9.6 — RID-split пакет
+  (реальные сборки в `runtimes/<rid>/lib/<tfm>/`). Чтобы получить чистую плоскую раскладку
+  одной версии, публикуйте с RID в отдельную папку (вне OneDrive):
+  `dotnet publish src/SystemBarIndicator.App -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -o <папка>`.
+  Обычный `bin` лежит в OneDrive и его содержимое может «уплывать» — на него не опираемся.
