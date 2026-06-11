@@ -35,36 +35,43 @@
 ```
 SystemBarIndicator/
 ├── src/
-│   └── SystemBarIndicator.App/
-│       ├── Program.cs              # Точка входа + MainForm (оверлей на панели задач)
-│       ├── GraphOverlay.cs         # Всплывающий оверлей с графиками
-│       ├── Sensors/                # Источники данных
-│       │   ├── CpuSensor.cs        # Загрузка CPU (PerformanceCounter)
-│       │   ├── RamSensor.cs        # RAM (GlobalMemoryStatusEx)
-│       │   ├── DiskSensor.cs       # Диск (PerformanceCounter PhysicalDisk)
-│       │   ├── NetworkSensor.cs    # Сеть (NetworkInterface / IPv4 статистика)
-│       │   └── HardwareSensor.cs   # CPU/GPU температура и загрузка (LibreHardwareMonitor)
-│       ├── Models/
-│       │   ├── SensorData.cs       # Текущий снимок показаний
-│       │   └── DataHistory.cs      # Кольцевая история измерений
-│       ├── Logging/
-│       │   └── Logger.cs           # Файловый логгер
+│   ├── SystemBarIndicator.Core/      # net10.0 — ядро без зависимостей от WinForms (тестируемое)
+│   │   ├── Models/
+│   │   │   ├── SensorData.cs         #   Текущий снимок показаний
+│   │   │   └── DataHistory.cs        #   Кольцевая история измерений
+│   │   ├── Monitoring/LoadLevel.cs   #   Пороги нагрузки/температуры
+│   │   └── Util/Formatting.cs        #   Форматирование скоростей
+│   └── SystemBarIndicator.App/       # net10.0-windows — WinForms UI + Windows-сенсоры
+│       ├── Program.cs                #   Точка входа + MainForm (бар на панели задач)
+│       ├── GraphOverlay.cs           #   Всплывающий оверлей с графиками
+│       ├── Sensors/                  #   Источники данных
+│       │   ├── CpuSensor.cs          #     Загрузка CPU (PerformanceCounter)
+│       │   ├── RamSensor.cs          #     RAM (GlobalMemoryStatusEx)
+│       │   ├── DiskSensor.cs         #     Диск (PerformanceCounter PhysicalDisk)
+│       │   ├── NetworkSensor.cs      #     Сеть (NetworkInterface / IPv4-статистика)
+│       │   └── HardwareSensor.cs     #     CPU/GPU температура и загрузка (LibreHardwareMonitor)
+│       ├── Logging/Logger.cs         #   Файловый логгер
 │       ├── app.manifest
 │       └── SystemBarIndicator.csproj
+├── tests/
+│   └── SystemBarIndicator.Tests/     # net10.0 — xUnit, покрывают логику Core
+├── .github/workflows/ci.yml          # Сборка + тесты (windows-latest, .NET 10)
+├── Directory.Build.props             # Общие настройки (Nullable, TreatWarningsAsErrors)
 ├── README.md
-├── ROADMAP.md                      # Долгосрочный план (опережает текущую реализацию)
-└── SUGGESTIONS.md                  # Идеи и предложения
+├── ROADMAP.md                        # Долгосрочный план (опережает текущую реализацию)
+└── SUGGESTIONS.md                    # Идеи и предложения
 ```
 
-> Примечание: `ROADMAP.md` и `SUGGESTIONS.md` описывают желаемое развитие (в т.ч. возможный переход на WinUI 3, окно настроек, автообновление). Текущая реализация — единый WinForms-проект, перечисленный выше.
+> Примечание: `ROADMAP.md` и `SUGGESTIONS.md` описывают желаемое развитие (в т.ч. возможный переход на WinUI 3, окно настроек, автообновление). Текущая реализация — то, что перечислено выше.
 
-## Сборка и запуск
+## Сборка, тесты и запуск
 
 ```bash
 git clone <repository-url>
 cd "SystemBarIndicator"
-dotnet build -c Release
-dotnet run --project src/SystemBarIndicator.App
+dotnet build -c Release          # сборка (предупреждения трактуются как ошибки)
+dotnet test  -c Release          # юнит-тесты (xUnit)
+dotnet run --project src/SystemBarIndicator.App   # запуск
 ```
 
 Лог приложения пишется в `%LOCALAPPDATA%\SystemBarIndicator\app.log`.

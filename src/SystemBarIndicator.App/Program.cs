@@ -3,7 +3,9 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using SystemBarIndicator.Models;
+using SystemBarIndicator.Monitoring;
 using SystemBarIndicator.Sensors;
+using SystemBarIndicator.Util;
 
 namespace SystemBarIndicator
 {
@@ -407,28 +409,19 @@ namespace SystemBarIndicator
             return x + 8;
         }
 
-        private static Brush GetLoadBrush(float p)
+        private static Brush BrushFor(LoadLevel level) => level switch
         {
-            if (p >= 0.9f) return BrushRed;
-            if (p >= 0.8f) return BrushOrange;
-            if (p >= 0.6f) return BrushYellow;
-            return BrushGreen;
-        }
+            LoadLevel.Critical => BrushRed,
+            LoadLevel.High => BrushOrange,
+            LoadLevel.Elevated => BrushYellow,
+            _ => BrushGreen
+        };
 
-        private static Brush GetTempBrush(float t)
-        {
-            if (t >= 90) return BrushRed;
-            if (t >= 75) return BrushOrange;
-            if (t >= 60) return BrushYellow;
-            return BrushGreen;
-        }
+        private static Brush GetLoadBrush(float fraction) => BrushFor(LoadLevels.FromFraction(fraction));
 
-        private string FormatSpeed(float kbps)
-        {
-            if (kbps >= 1024) return string.Format("{0:F1}MB/s", kbps / 1024f);
-            if (kbps >= 1) return string.Format("{0:F0}KB/s", kbps);
-            return string.Format("{0:F0}B/s", kbps * 1024);
-        }
+        private static Brush GetTempBrush(float celsius) => BrushFor(LoadLevels.FromTemperature(celsius));
+
+        private static string FormatSpeed(float kbps) => Formatting.FormatSpeed(kbps);
 
         protected override void WndProc(ref Message m)
         {

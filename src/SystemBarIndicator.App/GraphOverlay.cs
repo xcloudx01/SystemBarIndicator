@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using SystemBarIndicator.Models;
+using SystemBarIndicator.Util;
 
 namespace SystemBarIndicator
 {
@@ -267,12 +268,7 @@ namespace SystemBarIndicator
             return path;
         }
 
-        private string FormatSpeed(float kbps)
-        {
-            if (kbps >= 1024) return string.Format("{0:F1}MB/s", kbps / 1024f);
-            if (kbps >= 1) return string.Format("{0:F0}KB/s", kbps);
-            return string.Format("{0:F0}B/s", kbps * 1024);
-        }
+        private static string FormatSpeed(float kbps) => Formatting.FormatSpeed(kbps);
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {

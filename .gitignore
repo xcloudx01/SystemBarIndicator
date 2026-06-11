@@ -1,7 +1,16 @@
+# Сборочный вывод
+bin/
+obj/
+publish/
+[Tt]est[Rr]esults/
+
+# Бинарные артефакты и логи
 *.exe
 *.dll
 *.pdb
 *.log
-bin/
-obj/
+
+# IDE
 .vs/
+.idea/
+*.user
