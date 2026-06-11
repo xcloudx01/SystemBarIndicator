@@ -14,10 +14,29 @@ namespace SystemBarIndicator
         [STAThread]
         static void Main()
         {
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
-            Application.Run(new MainForm());
+            // Один экземпляр на сессию: повторный запуск (в т.ч. двойной клик по ярлыку)
+            // просто завершается, чтобы не появлялись две полоски.
+            System.Threading.Mutex instanceLock;
+            bool isNewInstance;
+            try
+            {
+                instanceLock = new System.Threading.Mutex(initiallyOwned: true, @"Local\SystemBarIndicator_SingleInstance", out isNewInstance);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return; // экземпляр уже запущен (с другим уровнем прав)
+            }
+
+            using (instanceLock)
+            {
+                if (!isNewInstance)
+                    return;
+
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+                Application.Run(new MainForm());
+            }
         }
     }
 

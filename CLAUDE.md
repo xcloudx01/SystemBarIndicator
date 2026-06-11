@@ -42,6 +42,8 @@ dotnet run --project src/SystemBarIndicator.App   # запуск приложе�
 - **Опрос данных.** `MainForm._timer` (1 c) обновляет единый снимок `SensorData _current`
   через классы `Sensors`, затем кладёт точку в `DataHistory` (кольцевой буфер на 120 точек).
   `HardwareSensor.Update()` обязателен раз за тик — без него LHM отдаёт пустые значения.
+- **Один экземпляр.** `Program.Main` удерживает именованный `Mutex`
+  (`Local\SystemBarIndicator_SingleInstance`); повторный запуск сразу завершается.
 - **Always-on-top.** Удержание поверх — через модификацию z-order в `WM_WINDOWPOSCHANGING`
   (без рекурсивного `SetWindowPos`); таймер 1 c — лишь страховка.
 - **Позиционирование.** `SHAppBarMessage(ABM_GETTASKBARPOS)` определяет прямоугольник и край
