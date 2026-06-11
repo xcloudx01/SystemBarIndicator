@@ -95,6 +95,13 @@ namespace SystemBarIndicator
         private static readonly Brush BrushOrange = new SolidBrush(Color.FromArgb(255, 152, 0));
         private static readonly Brush BrushYellow = new SolidBrush(Color.FromArgb(255, 193, 7));
         private static readonly Brush BrushGreen = new SolidBrush(Color.FromArgb(76, 175, 80));
+        // Цвета сети совпадают с графиками в оверлее (Net DL / Net UL).
+        private static readonly Brush NetDownBrush = new SolidBrush(Color.FromArgb(237, 137, 54));
+        private static readonly Brush NetUpBrush = new SolidBrush(Color.FromArgb(38, 198, 218));
+        // Диск — отдельная цветовая пара (фиолетовый/розовый), чтобы не путать с сетью.
+        private static readonly Brush DiskReadBrush = new SolidBrush(Color.FromArgb(171, 71, 188));
+        private static readonly Brush DiskWriteBrush = new SolidBrush(Color.FromArgb(236, 64, 122));
+        private static readonly Brush NetTrackBrush = new SolidBrush(Color.FromArgb(55, 55, 62));
 
         private Point _mouseDownLocation;
         private bool _mouseDown;
@@ -115,6 +122,14 @@ namespace SystemBarIndicator
         private IntPtr _iconHandle = IntPtr.Zero;
 
         private readonly SensorData _current = new();
+
+        // Сглаживание и автомасштаб для «рваных» по природе индикаторов сети и диска.
+        private readonly Ema _netDownEma = new(0.4f);
+        private readonly Ema _netUpEma = new(0.4f);
+        private readonly AutoScale _netScale = new(floor: 64f, decay: 0.97f);   // КБ/с
+        private readonly Ema _diskReadEma = new(0.4f);
+        private readonly Ema _diskWriteEma = new(0.4f);
+        private readonly AutoScale _diskScale = new(floor: 8f, decay: 0.97f);   // МБ/с
 
         public TaskbarEdge BarEdge { get; private set; } = TaskbarEdge.Bottom;
 
@@ -290,12 +305,21 @@ namespace SystemBarIndicator
                     _current.DiskUsagePercent = disk.usagePercent;
                 }
 
+                float dskR = _diskReadEma.Update(_current.DiskRead);
+                float dskW = _diskWriteEma.Update(_current.DiskWrite);
+                _diskScale.Update(Math.Max(dskR, dskW));
+
                 if (_networkSensor != null)
                 {
                     var net = _networkSensor.GetInfo();
                     _current.NetDown = net.downloadKBps;
                     _current.NetUp = net.uploadKBps;
                 }
+
+                // Сглаживаем мгновенную скорость и обновляем общую шкалу баров по пику.
+                float netDl = _netDownEma.Update(_current.NetDown);
+                float netUl = _netUpEma.Update(_current.NetUp);
+                _netScale.Update(Math.Max(netDl, netUl));
 
                 _trayIcon.Text = string.Format("CPU: {0:F0}% | RAM: {1:F0}% | GPU: {2:F0}%",
                     _current.CpuUsage, _current.RamUsage, _current.GpuUsage);
@@ -375,9 +399,68 @@ namespace SystemBarIndicator
                 x = DrawSeparator(e.Graphics, x, y);
             }
 
-            x = DrawSection(e.Graphics, "D", string.Format("{0:F0}/{1:F0}MB", _current.DiskRead, _current.DiskWrite), 0f, x, y);
+            x = DrawDualBars(e.Graphics, "D", _diskScale.Fraction(_diskReadEma.Value), _diskScale.Fraction(_diskWriteEma.Value), DiskReadBrush, DiskWriteBrush, x, y);
             x = DrawSeparator(e.Graphics, x, y);
-            x = DrawSection(e.Graphics, "N", string.Format("{0}/{1}", FormatSpeed(_current.NetDown), FormatSpeed(_current.NetUp)), 0f, x, y);
+            x = DrawDualBars(e.Graphics, "N", _netScale.Fraction(_netDownEma.Value), _netScale.Fraction(_netUpEma.Value), NetDownBrush, NetUpBrush, x, y);
+        }
+
+        // Диск и сеть рисуем парой горизонтальных баров: ▼ чтение/загрузка, ▲ запись/отдача.
+        // Значения сглажены (EMA), ширина баров фиксирована, у каждого ресурса свой
+        // автомасштаб — поэтому ничего не «прыгает».
+        private int DrawDualBars(Graphics g, string label, float frac1, float frac2, Brush color1, Brush color2, int x, int y)
+        {
+            const int barW = 34;
+            const int barH = 8;
+            int barTop = y + (16 - barH) / 2;
+
+            g.DrawString(label, SmallFont, DimBrush, x, y);
+            x += (int)g.MeasureString(label, SmallFont).Width + 4;
+
+            x = DrawBar(g, x, barTop, barW, barH, frac1, color1, down: true);
+            x += 6;
+            x = DrawBar(g, x, barTop, barW, barH, frac2, color2, down: false);
+
+            return x;
+        }
+
+        private int DrawBar(Graphics g, int x, int top, int w, int h, float fraction, Brush color, bool down)
+        {
+            const float ts = 3f;
+            float cx = x + ts;
+            float cy = top + h / 2f;
+            PointF[] tri = down
+                ? new[] { new PointF(cx - ts, cy - ts), new PointF(cx + ts, cy - ts), new PointF(cx, cy + ts) }
+                : new[] { new PointF(cx - ts, cy + ts), new PointF(cx + ts, cy + ts), new PointF(cx, cy - ts) };
+            g.FillPolygon(color, tri);
+            x += (int)(ts * 2) + 4;
+
+            FillRoundRect(g, NetTrackBrush, x, top, w, h, 3f);
+            float fillW = w * fraction;
+            if (fillW >= 1f)
+                FillRoundRect(g, color, x, top, fillW, h, 3f);
+
+            return x + w;
+        }
+
+        private static void FillRoundRect(Graphics g, Brush brush, float x, float y, float w, float h, float r)
+        {
+            if (w <= 0f || h <= 0f) return;
+            r = Math.Min(r, Math.Min(w, h) / 2f);
+            using var path = new System.Drawing.Drawing2D.GraphicsPath();
+            if (r <= 0.5f)
+            {
+                path.AddRectangle(new RectangleF(x, y, w, h));
+            }
+            else
+            {
+                float d = r * 2f;
+                path.AddArc(x, y, d, d, 180, 90);
+                path.AddArc(x + w - d, y, d, d, 270, 90);
+                path.AddArc(x + w - d, y + h - d, d, d, 0, 90);
+                path.AddArc(x, y + h - d, d, d, 90, 90);
+                path.CloseFigure();
+            }
+            g.FillPath(brush, path);
         }
 
         private int DrawSection(Graphics g, string label, string value, float loadPercent, int x, int y)
@@ -420,8 +503,6 @@ namespace SystemBarIndicator
         private static Brush GetLoadBrush(float fraction) => BrushFor(LoadLevels.FromFraction(fraction));
 
         private static Brush GetTempBrush(float celsius) => BrushFor(LoadLevels.FromTemperature(celsius));
-
-        private static string FormatSpeed(float kbps) => Formatting.FormatSpeed(kbps);
 
         protected override void WndProc(ref Message m)
         {
