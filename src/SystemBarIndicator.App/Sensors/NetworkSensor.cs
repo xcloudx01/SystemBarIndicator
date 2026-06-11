@@ -1,60 +1,86 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Net.NetworkInformation;
 
 namespace SystemBarIndicator.Sensors
 {
+    /// <summary>
+    /// Измеряет скорость сети по дельте счётчиков байт интерфейсов.
+    /// Используется <see cref="IPInterfaceStatistics"/> вместо PerformanceCounter:
+    /// имена экземпляров perf-счётчиков "Network Interface" формируются из описания
+    /// адаптера и не совпадают с <c>NetworkInterface.Name</c>, из-за чего сопоставление
+    /// по имени часто не находит счётчик.
+    /// </summary>
     public class NetworkSensor
     {
-        private readonly Dictionary<string, PerformanceCounter> _downloadCounters = new();
-        private readonly Dictionary<string, PerformanceCounter> _uploadCounters = new();
-        private readonly Dictionary<string, long> _prevDownloadBytes = new();
-        private readonly Dictionary<string, long> _prevUploadBytes = new();
-        private readonly Dictionary<string, DateTime> _lastReadTime = new();
+        private readonly Dictionary<string, long> _prevReceived = new();
+        private readonly Dictionary<string, long> _prevSent = new();
+        private DateTime _lastCheck;
 
         public NetworkSensor()
         {
-            var interfaces = NetworkInterface.GetAllNetworkInterfaces()
-                .Where(ni => ni.OperationalStatus == OperationalStatus.Up &&
-                             ni.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
-                             ni.NetworkInterfaceType != NetworkInterfaceType.Tunnel)
-                .ToList();
-
-            foreach (var ni in interfaces)
+            _lastCheck = DateTime.Now;
+            foreach (var ni in GetActiveInterfaces())
             {
                 try
                 {
-                    var ifName = ni.Name;
-                    _downloadCounters[ifName] = new PerformanceCounter("Network Interface", "Bytes Received/sec", ifName);
-                    _uploadCounters[ifName] = new PerformanceCounter("Network Interface", "Bytes Sent/sec", ifName);
-                    _downloadCounters[ifName].NextValue();
-                    _uploadCounters[ifName].NextValue();
+                    var stats = ni.GetIPv4Statistics();
+                    _prevReceived[ni.Id] = stats.BytesReceived;
+                    _prevSent[ni.Id] = stats.BytesSent;
                 }
                 catch
                 {
-                    // Skip interfaces that don't have performance counters
+                    // интерфейс без доступной IPv4-статистики — пропускаем
                 }
             }
         }
 
         public (float downloadKBps, float uploadKBps) GetInfo()
         {
-            float totalDownload = 0, totalUpload = 0;
-            foreach (var key in _downloadCounters.Keys)
+            var now = DateTime.Now;
+            double elapsed = (now - _lastCheck).TotalSeconds;
+            long totalDown = 0, totalUp = 0;
+
+            foreach (var ni in GetActiveInterfaces())
             {
                 try
                 {
-                    totalDownload += _downloadCounters[key].NextValue();
-                    totalUpload += _uploadCounters[key].NextValue();
+                    var stats = ni.GetIPv4Statistics();
+                    string id = ni.Id;
+
+                    if (_prevReceived.TryGetValue(id, out long prevR))
+                    {
+                        long diff = stats.BytesReceived - prevR;
+                        if (diff > 0) totalDown += diff;
+                    }
+                    if (_prevSent.TryGetValue(id, out long prevS))
+                    {
+                        long diff = stats.BytesSent - prevS;
+                        if (diff > 0) totalUp += diff;
+                    }
+
+                    _prevReceived[id] = stats.BytesReceived;
+                    _prevSent[id] = stats.BytesSent;
                 }
                 catch
                 {
-                    // Skip failed counters
+                    // пропускаем сбойный интерфейс
                 }
             }
-            return (totalDownload / 1024f, totalUpload / 1024f);
+
+            _lastCheck = now;
+            if (elapsed <= 0) return (0, 0);
+
+            return ((float)(totalDown / 1024.0 / elapsed), (float)(totalUp / 1024.0 / elapsed));
+        }
+
+        private static IEnumerable<NetworkInterface> GetActiveInterfaces()
+        {
+            return NetworkInterface.GetAllNetworkInterfaces()
+                .Where(ni => ni.OperationalStatus == OperationalStatus.Up &&
+                             ni.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
+                             ni.NetworkInterfaceType != NetworkInterfaceType.Tunnel);
         }
     }
 }

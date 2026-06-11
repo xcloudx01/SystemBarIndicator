@@ -1,10 +1,9 @@
 using System;
 using System.Diagnostics;
-using System.Linq;
 
 namespace SystemBarIndicator.Sensors
 {
-    public class CpuSensor
+    public class CpuSensor : IDisposable
     {
         private readonly PerformanceCounter _cpuCounter;
 

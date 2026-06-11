@@ -1,76 +1,73 @@
 # SystemBar Indicator
 
-Системный монитор для Windows 11, интегрированный в панель задач. Отображает загрузку CPU, GPU, RAM, диска, сети, а также температуру CPU и GPU в реальном времени.
+Системный монитор для Windows 11, закреплённый поверх области панели задач. Отображает в реальном времени загрузку CPU, RAM, GPU, диска и сети, а также температуру CPU и GPU. По клику разворачивает оверлей с графиками истории.
 
 ## Возможности
 
-- **CPU** — загрузка по ядрам и общая, температура
-- **GPU** — загрузка, температура, использование VRAM
-- **RAM** — использование оперативной памяти
-- **Диск** — чтение/запись, загрузка
+- **CPU** — общая загрузка и температура
+- **RAM** — использование оперативной памяти (процент, занято/всего)
+- **GPU** — загрузка и температура (NVIDIA / AMD / Intel), при наличии — объём VRAM
+- **Диск** — скорость чтения/записи и общая активность
 - **Сеть** — скорость загрузки и отдачи
-- **Температуры** — CPU и GPU в реальном времени
-- **Always on top** — всегда поверх панели задач
-- **Нативный вид** — совпадает со стилем панели задач Windows 11
+- **Графики** — оверлей с историей последних ~120 измерений (плавные кривые)
+- **Always on top** — окно удерживается поверх панели задач
+- **Трей** — иконка с краткой сводкой и контекстным меню
 
 ## Технологический стек
 
 | Слой | Технология |
 |------|------------|
-| Язык | C# 13 |
-| Фреймворк | WinUI 3 (Windows App SDK) |
-| Runtime | .NET 10.0 |
-| Графика | Win32 GDI+ |
-| Мониторинг | WMI, Performance Counters, OpenHardwareMonitorLib |
-| Хранение настроек | JSON |
+| Язык | C# |
+| UI-фреймворк | Windows Forms |
+| Runtime | .NET 10 (`net10.0-windows`) |
+| Графика | GDI+ (`System.Drawing`) |
+| Загрузка/RAM/диск/сеть | PerformanceCounter, `GlobalMemoryStatusEx`, `NetworkInterface` |
+| Температуры и GPU | [LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) 0.9.4 |
 
 ## Требования
 
-- Windows 11 (рекомендуется) или Windows 10 (Build 19041+)
-- .NET 10.0 SDK
-- Visual Studio 2022 (17.10+) с рабочей нагрузкой "Windows App Development"
+- Windows 10 (Build 19041+) или Windows 11
+- .NET 10 SDK
+- Для чтения температур CPU/GPU может потребоваться запуск с правами администратора (зависит от драйверов оборудования)
 
 ## Структура проекта
 
 ```
 SystemBarIndicator/
 ├── src/
-│   ├── SystemBarIndicator.App/          # Главное приложение
-│   │   ├── App.xaml / App.xaml.cs
-│   │   ├── MainWindow.xaml / .cs        # Окно-оверлей панели задач
-│   │   └── SystemTray/                  # Иконка в системном трее
-│   ├── SystemBarIndicator.Core/         # Ядро мониторинга
-│   │   ├── Sensors/
-│   │   │   ├── CpuSensor.cs
-│   │   │   ├── GpuSensor.cs
-│   │   │   ├── RamSensor.cs
-│   │   │   ├── DiskSensor.cs
-│   │   │   ├── NetworkSensor.cs
-│   │   │   └── TemperatureSensor.cs
-│   │   ├── SensorManager.cs             # Диспетчер сенсоров
-│   │   └── Models/                      # Модели данных
-│   ├── SystemBarIndicator.UI/           # Компоненты интерфейса
-│   │   ├── TaskbarWidget/               # Виджет на панели задач
-│   │   ├── SettingsWindow/              # Окно настроек
-│   │   └── Themes/                      # Темы оформления
-│   └── SystemBarIndicator.Services/     # Сервисы
-│       ├── ConfigService.cs             # Настройки
-│       └── UpdateService.cs             # Автообновление
-├── tests/
-├── docs/
-├── assets/
+│   └── SystemBarIndicator.App/
+│       ├── Program.cs              # Точка входа + MainForm (оверлей на панели задач)
+│       ├── GraphOverlay.cs         # Всплывающий оверлей с графиками
+│       ├── Sensors/                # Источники данных
+│       │   ├── CpuSensor.cs        # Загрузка CPU (PerformanceCounter)
+│       │   ├── RamSensor.cs        # RAM (GlobalMemoryStatusEx)
+│       │   ├── DiskSensor.cs       # Диск (PerformanceCounter PhysicalDisk)
+│       │   ├── NetworkSensor.cs    # Сеть (NetworkInterface / IPv4 статистика)
+│       │   └── HardwareSensor.cs   # CPU/GPU температура и загрузка (LibreHardwareMonitor)
+│       ├── Models/
+│       │   ├── SensorData.cs       # Текущий снимок показаний
+│       │   └── DataHistory.cs      # Кольцевая история измерений
+│       ├── Logging/
+│       │   └── Logger.cs           # Файловый логгер
+│       ├── app.manifest
+│       └── SystemBarIndicator.csproj
 ├── README.md
-├── ROADMAP.md
-└── SUGGESTIONS.md
+├── ROADMAP.md                      # Долгосрочный план (опережает текущую реализацию)
+└── SUGGESTIONS.md                  # Идеи и предложения
 ```
 
-## Сборка
+> Примечание: `ROADMAP.md` и `SUGGESTIONS.md` описывают желаемое развитие (в т.ч. возможный переход на WinUI 3, окно настроек, автообновление). Текущая реализация — единый WinForms-проект, перечисленный выше.
+
+## Сборка и запуск
 
 ```bash
 git clone <repository-url>
-cd SystemBarIndicator
+cd "SystemBarIndicator"
 dotnet build -c Release
+dotnet run --project src/SystemBarIndicator.App
 ```
+
+Лог приложения пишется в `%LOCALAPPDATA%\SystemBarIndicator\app.log`.
 
 ## Лицензия
 

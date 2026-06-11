@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace SystemBarIndicator.Sensors
 {
-    public class DiskSensor
+    public class DiskSensor : IDisposable
     {
         private readonly List<PerformanceCounter> _readCounters = new();
         private readonly List<PerformanceCounter> _writeCounters = new();
@@ -31,10 +31,10 @@ namespace SystemBarIndicator.Sensors
 
         public (float readMBps, float writeMBps, float usagePercent) GetInfo()
         {
-            float totalRead = 0, totalWrite = 0, totalUsage = 0;
             int count = _readCounters.Count;
             if (count == 0) return (0, 0, 0);
 
+            float totalRead = 0, totalWrite = 0, totalUsage = 0;
             for (int i = 0; i < count; i++)
             {
                 totalRead += _readCounters[i].NextValue();
@@ -43,6 +43,12 @@ namespace SystemBarIndicator.Sensors
             }
 
             return (totalRead / 1048576f, totalWrite / 1048576f, totalUsage / count);
+        }
+
+        public void Dispose()
+        {
+            foreach (var c in _readCounters.Concat(_writeCounters).Concat(_usageCounters))
+                c.Dispose();
         }
     }
 }

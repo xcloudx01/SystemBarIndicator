@@ -24,6 +24,16 @@ namespace SystemBarIndicator.Sensors
             _computer.Open();
         }
 
+        /// <summary>
+        /// Обновляет показания всех устройств один раз. Должен вызываться раз за тик
+        /// перед чтением геттеров — LibreHardwareMonitor не обновляет значения сам.
+        /// </summary>
+        public void Update()
+        {
+            foreach (var hw in _computer.Hardware)
+                hw.Update();
+        }
+
         public float? GetCpuTemperature()
         {
             return GetFirstValue(_computer.Hardware
@@ -53,7 +63,7 @@ namespace SystemBarIndicator.Sensors
         {
             var gpuHardware = _computer.Hardware
                 .FirstOrDefault(h => h.HardwareType == HardwareType.GpuNvidia || h.HardwareType == HardwareType.GpuAmd || h.HardwareType == HardwareType.GpuIntel);
-            
+
             if (gpuHardware == null) return null;
 
             float? used = null;

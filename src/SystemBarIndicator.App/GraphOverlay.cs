@@ -9,25 +9,40 @@ namespace SystemBarIndicator
 {
     public class GraphOverlay : Form
     {
+        private const int ChartHeight = 72;
+        private const int OuterPadding = 8;
+        private const int Gap = 4;
+
+        // Общие ресурсы рисования — одинаковы для всех графиков, живут на всё время работы.
+        private static readonly Font TitleFont = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+        private static readonly Brush TitleBrush = new SolidBrush(Color.FromArgb(150, 150, 170));
+        private static readonly Font ValueFont = new Font("Segoe UI", 13f, FontStyle.Bold);
+        private static readonly Brush CardBrush = new SolidBrush(Color.FromArgb(28, 28, 38));
+        private static readonly Pen GridPen = new Pen(Color.FromArgb(38, 38, 52), 1);
+
         private readonly DataHistory _history;
         private readonly Func<SensorData> _getCurrentData;
-        private readonly Form _parentForm;
-        private Timer _updateTimer;
-        private Timer _positionTimer;
+        private readonly MainForm _parentForm;
+        private readonly Timer _updateTimer;
 
         private class ChartConfig
         {
-            public string Title;
+            public required string Title;
             public Color LineColor;
-            public Func<DataPoint, float> GetValue;
-            public Func<SensorData, string> FormatValue;
+            public required Func<DataPoint, float> GetValue;
+            public required Func<SensorData, string> FormatValue;
             public float MaxDefault;
             public bool ShowOnlyIfPositive;
+
+            // Цветные ресурсы графика — создаются один раз, освобождаются в OnFormClosing.
+            public SolidBrush LineBrush = null!;
+            public Pen LinePen = null!;
+            public Pen GlowPen = null!;
         }
 
-        private ChartConfig[] _charts;
+        private readonly ChartConfig[] _charts;
 
-        public GraphOverlay(DataHistory history, Func<SensorData> getCurrentData, Form parentForm)
+        public GraphOverlay(DataHistory history, Func<SensorData> getCurrentData, MainForm parentForm)
         {
             _history = history;
             _getCurrentData = getCurrentData;
@@ -45,6 +60,13 @@ namespace SystemBarIndicator
                 new ChartConfig { Title = "Net UL", LineColor = Color.FromArgb(38, 198, 218), GetValue = p => p.NetUp, FormatValue = d => FormatSpeed(d.NetUp), MaxDefault = 10000, ShowOnlyIfPositive = false }
             };
 
+            foreach (var c in _charts)
+            {
+                c.LineBrush = new SolidBrush(c.LineColor);
+                c.LinePen = new Pen(c.LineColor, 1.5f) { LineJoin = LineJoin.Round };
+                c.GlowPen = new Pen(Color.FromArgb(25, c.LineColor.R, c.LineColor.G, c.LineColor.B), 3.5f) { LineJoin = LineJoin.Round };
+            }
+
             this.FormBorderStyle = FormBorderStyle.None;
             this.ShowInTaskbar = false;
             this.TopMost = true;
@@ -56,56 +78,62 @@ namespace SystemBarIndicator
 
             UpdateSize();
 
+            // Один таймер: пересчёт размера/позиции + перерисовка. Прежний таймер
+            // позиционирования (100 мс) убран — окно следует за панелью через
+            // событие LocationChanged родителя, а здесь обновляемся раз в 500 мс.
             _updateTimer = new Timer { Interval = 500 };
-            _updateTimer.Tick += (s, e) => this.Invalidate();
+            _updateTimer.Tick += (s, e) => { PositionAboveParent(); this.Invalidate(); };
             _updateTimer.Start();
-
-            _positionTimer = new Timer { Interval = 100 };
-            _positionTimer.Tick += (s, e) => PositionAboveParent();
-            _positionTimer.Start();
         }
 
         private void UpdateSize()
         {
-            int chartHeight = 72;
-            int padding = 8;
-            int gap = 4;
-            int visibleCharts = GetVisibleChartCount();
-            int totalHeight = padding * 2 + visibleCharts * chartHeight + (visibleCharts - 1) * gap;
+            int visibleCharts = GetVisibleChartCount(_history.GetPoints());
+            int totalHeight = OuterPadding * 2 + visibleCharts * ChartHeight + Math.Max(visibleCharts - 1, 0) * Gap;
             this.Size = new Size(_parentForm.Width, Math.Min(totalHeight, 650));
         }
 
-        private int GetVisibleChartCount()
+        private int GetVisibleChartCount(List<DataPoint> data)
         {
             int count = 0;
             foreach (var c in _charts)
             {
-                if (!c.ShowOnlyIfPositive) { count++; continue; }
-                var data = _history.GetPoints();
-                bool hasAny = false;
-                int checkCount = Math.Min(10, data.Count);
-                for (int i = data.Count - 1; i >= data.Count - checkCount; i--)
-                {
-                    if (i >= 0 && c.GetValue(data[i]) > 0)
-                    {
-                        hasAny = true;
-                        break;
-                    }
-                }
-                if (hasAny) count++;
+                if (!c.ShowOnlyIfPositive || HasRecentPositive(c, data))
+                    count++;
             }
             return count;
+        }
+
+        private static bool HasRecentPositive(ChartConfig chart, List<DataPoint> data)
+        {
+            int checkCount = Math.Min(10, data.Count);
+            for (int i = data.Count - 1; i >= data.Count - checkCount; i--)
+            {
+                if (i >= 0 && chart.GetValue(data[i]) > 0)
+                    return true;
+            }
+            return false;
         }
 
         public void PositionAboveParent()
         {
             UpdateSize();
-            int newY = _parentForm.Top - this.Height - 4;
-            if (newY < 0) newY = 0;
-            if (this.Location.Y != newY || this.Width != _parentForm.Width)
+
+            int x = _parentForm.Left;
+            int y;
+            if (_parentForm.BarEdge == MainForm.TaskbarEdge.Top)
             {
-                this.Location = new Point(_parentForm.Left, newY);
+                y = _parentForm.Bottom + Gap;
             }
+            else
+            {
+                y = _parentForm.Top - this.Height - Gap;
+                if (y < 0) y = 0;
+            }
+
+            var loc = new Point(x, y);
+            if (this.Location != loc)
+                this.Location = loc;
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -114,60 +142,31 @@ namespace SystemBarIndicator
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-            int chartHeight = 72;
-            int padding = 8;
-            int gap = 4;
-            int y = padding;
+            var data = _history.GetPoints(); // один снимок истории на кадр
+            int y = OuterPadding;
 
             foreach (var chart in _charts)
             {
-                if (chart.ShowOnlyIfPositive)
-                {
-                    var data = _history.GetPoints();
-                    bool hasAny = false;
-                    int checkCount = Math.Min(10, data.Count);
-                    for (int i = data.Count - 1; i >= data.Count - checkCount; i--)
-                    {
-                        if (i >= 0 && chart.GetValue(data[i]) > 0)
-                        {
-                            hasAny = true;
-                            break;
-                        }
-                    }
-                    if (!hasAny) continue;
-                }
+                if (chart.ShowOnlyIfPositive && !HasRecentPositive(chart, data))
+                    continue;
 
-                DrawChart(e.Graphics, chart, padding, y, this.Width - padding * 2, chartHeight);
-                y += chartHeight + gap;
+                DrawChart(e.Graphics, chart, data, OuterPadding, y, this.Width - OuterPadding * 2, ChartHeight);
+                y += ChartHeight + Gap;
             }
         }
 
-        private void DrawChart(Graphics g, ChartConfig chart, int x, int y, int w, int h)
+        private void DrawChart(Graphics g, ChartConfig chart, List<DataPoint> data, int x, int y, int w, int h)
         {
             using (var path = CreateRoundRect(x, y, w, h, 8))
-            using (var brush = new SolidBrush(Color.FromArgb(28, 28, 38)))
             {
-                g.FillPath(brush, path);
+                g.FillPath(CardBrush, path);
             }
-
-            var data = _history.GetPoints();
-            float currentVal = 0;
-            if (data.Count > 0)
-                currentVal = chart.GetValue(data[data.Count - 1]);
 
             string displayVal = chart.FormatValue(_getCurrentData());
-            using (var titleFont = new Font("Segoe UI", 8.5f, FontStyle.Bold))
-            using (var titleBrush = new SolidBrush(Color.FromArgb(150, 150, 170)))
-            {
-                g.DrawString(chart.Title, titleFont, titleBrush, x + 10, y + 6);
-            }
+            g.DrawString(chart.Title, TitleFont, TitleBrush, x + 10, y + 6);
 
-            using (var valFont = new Font("Segoe UI", 13f, FontStyle.Bold))
-            using (var valBrush = new SolidBrush(chart.LineColor))
-            {
-                var size = g.MeasureString(displayVal, valFont);
-                g.DrawString(displayVal, valFont, valBrush, x + w - size.Width - 10, y + 4);
-            }
+            var size = g.MeasureString(displayVal, ValueFont);
+            g.DrawString(displayVal, ValueFont, chart.LineBrush, x + w - size.Width - 10, y + 4);
 
             int chartX = x + 10;
             int chartY = y + 24;
@@ -184,16 +183,13 @@ namespace SystemBarIndicator
             }
             maxVal = Math.Max(maxVal, 1);
 
-            using (var gridPen = new Pen(Color.FromArgb(38, 38, 52), 1))
+            for (int i = 1; i <= 3; i++)
             {
-                for (int i = 1; i <= 3; i++)
-                {
-                    int gy = chartY + (int)(chartH * i / 4f);
-                    g.DrawLine(gridPen, chartX, gy, chartX + chartW, gy);
-                }
+                int gy = chartY + (int)(chartH * i / 4f);
+                g.DrawLine(GridPen, chartX, gy, chartX + chartW, gy);
             }
 
-            var pts = new List<PointF>();
+            var pts = new List<PointF>(data.Count);
             float stepX = (float)chartW / Math.Max(data.Count - 1, 1);
             for (int i = 0; i < data.Count; i++)
             {
@@ -204,7 +200,7 @@ namespace SystemBarIndicator
 
             if (pts.Count >= 2)
             {
-                using (var fillPath = CreateSmoothFillPath(pts, chartX, chartY + chartH))
+                using (var fillPath = CreateSmoothFillPath(pts, chartY + chartH))
                 using (var gradientBrush = new LinearGradientBrush(
                     new PointF(0, chartY), new PointF(0, chartY + chartH),
                     Color.FromArgb(45, chart.LineColor.R, chart.LineColor.G, chart.LineColor.B),
@@ -214,28 +210,17 @@ namespace SystemBarIndicator
                 }
 
                 using (var linePath = CreateSmoothLinePath(pts))
-                using (var linePen = new Pen(chart.LineColor, 2f))
                 {
-                    linePen.LineJoin = LineJoin.Round;
-                    g.DrawPath(linePen, linePath);
-                }
-
-                using (var linePath = CreateSmoothLinePath(pts))
-                using (var glowPen = new Pen(Color.FromArgb(30, chart.LineColor.R, chart.LineColor.G, chart.LineColor.B), 5f))
-                {
-                    glowPen.LineJoin = LineJoin.Round;
-                    g.DrawPath(glowPen, linePath);
+                    g.DrawPath(chart.LinePen, linePath);
+                    g.DrawPath(chart.GlowPen, linePath);
                 }
 
                 var lastPt = pts[pts.Count - 1];
-                using (var dotBrush = new SolidBrush(chart.LineColor))
-                {
-                    g.FillEllipse(dotBrush, lastPt.X - 3, lastPt.Y - 3, 6, 6);
-                }
+                g.FillEllipse(chart.LineBrush, lastPt.X - 2.5f, lastPt.Y - 2.5f, 5, 5);
             }
         }
 
-        private GraphicsPath CreateSmoothFillPath(List<PointF> points, float baseX, float baseY)
+        private GraphicsPath CreateSmoothFillPath(List<PointF> points, float baseY)
         {
             var path = new GraphicsPath();
             if (points.Count < 2) return path;
@@ -284,17 +269,23 @@ namespace SystemBarIndicator
 
         private string FormatSpeed(float kbps)
         {
-            if (kbps >= 1024) return string.Format("{0:F1}GB", kbps / 1024f);
-            if (kbps >= 1) return string.Format("{0:F0}KB", kbps);
-            return string.Format("{0:F0}B", kbps * 1024);
+            if (kbps >= 1024) return string.Format("{0:F1}MB/s", kbps / 1024f);
+            if (kbps >= 1) return string.Format("{0:F0}KB/s", kbps);
+            return string.Format("{0:F0}B/s", kbps * 1024);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             _updateTimer.Stop();
             _updateTimer.Dispose();
-            _positionTimer.Stop();
-            _positionTimer.Dispose();
+
+            foreach (var c in _charts)
+            {
+                c.LineBrush.Dispose();
+                c.LinePen.Dispose();
+                c.GlowPen.Dispose();
+            }
+
             base.OnFormClosing(e);
         }
     }
