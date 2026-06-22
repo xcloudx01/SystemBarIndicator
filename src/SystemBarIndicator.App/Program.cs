@@ -51,10 +51,6 @@ namespace SystemBarIndicator
         [DllImport("user32.dll")]
         private static extern int GetSystemMetrics(int nIndex);
 
-        [DllImport("user32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool DestroyIcon(IntPtr hIcon);
-
         [DllImport("shell32.dll", CallingConvention = CallingConvention.StdCall)]
         private static extern IntPtr SHAppBarMessage(uint dwMessage, ref APPBARDATA pData);
 
@@ -138,7 +134,7 @@ namespace SystemBarIndicator
         private readonly NotifyIcon _trayIcon;
         private readonly DataHistory _history;
         private GraphOverlay? _graphOverlay;
-        private IntPtr _iconHandle = IntPtr.Zero;
+        private readonly Icon _appIcon;
 
         private readonly SensorData _current = new();
 
@@ -160,6 +156,8 @@ namespace SystemBarIndicator
 
             _history = new DataHistory(120);
 
+            _appIcon = LoadAppIcon();
+            this.Icon = _appIcon;
             this.FormBorderStyle = FormBorderStyle.None;
             this.ShowInTaskbar = true;
             this.TopMost = true;
@@ -188,7 +186,7 @@ namespace SystemBarIndicator
             {
                 Visible = true,
                 Text = "SystemBar Indicator",
-                Icon = CreateIcon()
+                Icon = _appIcon
             };
             _trayIcon.MouseClick += TrayIconClick;
 
@@ -215,21 +213,13 @@ namespace SystemBarIndicator
             catch (Exception ex) { Logger.Error("HardwareSensor.init", ex); }
         }
 
-        private Icon CreateIcon()
+        // Иконка вшита в сборку как ресурс (см. EmbeddedResource в .csproj). Многоразмерная .ico:
+        // Windows сам берёт подходящий кадр (16 px для трея, крупнее — для окна/панели задач).
+        private static Icon LoadAppIcon()
         {
-            using var bmp = new Bitmap(16, 16);
-            using (var g = Graphics.FromImage(bmp))
-            {
-                g.Clear(Color.Transparent);
-                using (var b = new SolidBrush(Color.FromArgb(0, 120, 212)))
-                    g.FillEllipse(b, 1, 1, 14, 14);
-                using (var f = new Font("Arial", 7f, FontStyle.Bold))
-                using (var tb = new SolidBrush(Color.White))
-                    g.DrawString("S", f, tb, 4, 3);
-            }
-            // Icon.FromHandle не владеет HICON — сохраняем хэндл и освобождаем его при закрытии.
-            _iconHandle = bmp.GetHicon();
-            return Icon.FromHandle(_iconHandle);
+            using var stream = typeof(MainForm).Assembly
+                .GetManifestResourceStream("SystemBarIndicator.appicon.ico");
+            return stream != null ? new Icon(stream) : SystemIcons.Application;
         }
 
         protected override void OnLoad(EventArgs e)
@@ -589,11 +579,7 @@ namespace SystemBarIndicator
 
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
-            if (_iconHandle != IntPtr.Zero)
-            {
-                DestroyIcon(_iconHandle);
-                _iconHandle = IntPtr.Zero;
-            }
+            _appIcon.Dispose();
 
             _timer.Dispose();
             _topmostTimer.Dispose();

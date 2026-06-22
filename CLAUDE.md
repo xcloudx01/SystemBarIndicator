@@ -69,3 +69,15 @@ dotnet run --project src/SystemBarIndicator.App   # запуск приложе�
   одной версии, публикуйте с RID в отдельную папку (вне OneDrive):
   `dotnet publish src/SystemBarIndicator.App -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -o <папка>`.
   Обычный `bin` лежит в OneDrive и его содержимое может «уплывать» — на него не опираемся.
+  Воспроизводимая установка целиком — `deploy/Install.ps1` (см. `deploy/README.md`).
+- **Запуск от администратора без UAC.** Приложению нужны права админа (драйвер PawnIO),
+  но манифест — `asInvoker`. Ярлык с флагом «запуск от администратора» спрашивал бы UAC
+  каждый раз, поэтому используется **назначенное задание** (RunLevel=Highest), а ярлык
+  запускает тихий `launch.vbs` → `schtasks /run` (запуск своего задания повышения не
+  требует). Регистрация задания — единственный шаг с правами админа (`Install.ps1`
+  самоповышается на нём).
+- **Иконка.** Многоразмерная `src/SystemBarIndicator.App/appicon.ico` вшита и в exe
+  (`ApplicationIcon`), и как `EmbeddedResource` — для трея/окна грузится в `LoadAppIcon()`.
+- **Скрипты `.ps1`, перезапускаемые с повышением, держим в ASCII.** Кириллица в `.ps1`
+  (UTF-8 без BOM), перечитанная `powershell.exe` как ANSI-кодировка, портится и однажды
+  сломала задание (регистрация в папке-кракозябре). Тексты для elevated-перезапуска — ASCII.

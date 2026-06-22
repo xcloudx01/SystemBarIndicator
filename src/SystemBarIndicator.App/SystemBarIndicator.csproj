@@ -11,7 +11,13 @@
     <PublishReadyToRun>true</PublishReadyToRun>
     <AssemblyName>SystemBarIndicator</AssemblyName>
     <RootNamespace>SystemBarIndicator</RootNamespace>
+    <ApplicationIcon>appicon.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Иконка приложения: и Win32-значок exe (ApplicationIcon выше), и ресурс для трея/окна. -->
+    <EmbeddedResource Include="appicon.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
