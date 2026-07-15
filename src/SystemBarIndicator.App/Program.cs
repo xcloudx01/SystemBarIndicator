@@ -117,6 +117,13 @@ namespace SystemBarIndicator
         private static readonly Brush DiskReadBrush = new SolidBrush(Color.FromArgb(171, 71, 188));
         private static readonly Brush DiskWriteBrush = new SolidBrush(Color.FromArgb(236, 64, 122));
         private static readonly Brush NetTrackBrush = new SolidBrush(Color.FromArgb(55, 55, 62));
+        // Числовые значения рисуются в слоте фиксированной ширины с прижатием вправо,
+        // чтобы секции не «дышали» при смене числа разрядов (9% ↔ 10%).
+        private static readonly StringFormat ValueRightAligned = new StringFormat(StringFormat.GenericDefault)
+        {
+            Alignment = StringAlignment.Far,
+            FormatFlags = StringFormatFlags.NoWrap
+        };
 
         private Point _mouseDownLocation;
         private bool _mouseDown;
@@ -137,6 +144,12 @@ namespace SystemBarIndicator
         private readonly Icon _appIcon;
 
         private readonly SensorData _current = new();
+
+        // «Защёлки» доступности датчиков: однажды появившаяся секция больше не исчезает,
+        // чтобы кратковременный сбой датчика (null → 0) не сдвигал компоновку.
+        private bool _hasCpuTemp;
+        private bool _hasGpu;
+        private bool _hasGpuTemp;
 
         // Сглаживание и автомасштаб для «рваных» по природе индикаторов сети и диска.
         private readonly Ema _netDownEma = new(0.4f);
@@ -301,6 +314,10 @@ namespace SystemBarIndicator
                     }
                 }
 
+                _hasCpuTemp |= _current.CpuTemperature > 0f;
+                _hasGpu |= _current.GpuUsage > 0f || _current.GpuTemperature > 0f;
+                _hasGpuTemp |= _current.GpuTemperature > 0f;
+
                 var ram = _ramSensor.GetInfo();
                 _current.RamUsage = ram.usagePercent;
                 _current.RamUsed = ram.usedBytes;
@@ -388,22 +405,22 @@ namespace SystemBarIndicator
             int x = 8;
             int y = (this.Height - 16) / 2;
 
-            x = DrawSection(e.Graphics, "CPU", string.Format("{0:F0}%", _current.CpuUsage), _current.CpuUsage / 100f, x, y);
-            if (_current.CpuTemperature > 0)
+            x = DrawSection(e.Graphics, "CPU", Formatting.FormatPercent(_current.CpuUsage), _current.CpuUsage / 100f, x, y);
+            if (_hasCpuTemp)
             {
-                x = DrawTemp(e.Graphics, string.Format("{0:F0}C", _current.CpuTemperature), _current.CpuTemperature, x, y);
+                x = DrawTemp(e.Graphics, Formatting.FormatTemperature(_current.CpuTemperature), _current.CpuTemperature, x, y);
             }
             x = DrawSeparator(e.Graphics, x, y);
 
-            x = DrawSection(e.Graphics, "RAM", string.Format("{0:F0}%", _current.RamUsage), _current.RamUsage / 100f, x, y);
+            x = DrawSection(e.Graphics, "RAM", Formatting.FormatPercent(_current.RamUsage), _current.RamUsage / 100f, x, y);
             x = DrawSeparator(e.Graphics, x, y);
 
-            if (_current.GpuUsage > 0 || _current.GpuTemperature > 0)
+            if (_hasGpu)
             {
-                x = DrawSection(e.Graphics, "GPU", string.Format("{0:F0}%", _current.GpuUsage), _current.GpuUsage / 100f, x, y);
-                if (_current.GpuTemperature > 0)
+                x = DrawSection(e.Graphics, "GPU", Formatting.FormatPercent(_current.GpuUsage), _current.GpuUsage / 100f, x, y);
+                if (_hasGpuTemp)
                 {
-                    x = DrawTemp(e.Graphics, string.Format("{0:F0}C", _current.GpuTemperature), _current.GpuTemperature, x, y);
+                    x = DrawTemp(e.Graphics, Formatting.FormatTemperature(_current.GpuTemperature), _current.GpuTemperature, x, y);
                 }
                 x = DrawSeparator(e.Graphics, x, y);
             }
@@ -480,19 +497,27 @@ namespace SystemBarIndicator
             SizeF ls = g.MeasureString(label, SmallFont);
             x += (int)ls.Width + 2;
 
-            g.DrawString(value, MainFont, loadBrush, x, y);
-            SizeF vs = g.MeasureString(value, MainFont);
-            x += (int)vs.Width + 10;
-
+            // Слот по самому широкому значению: правый край и знак «%» неподвижны.
+            x = DrawValueSlot(g, value, "100%", loadBrush, x, y) + 10;
             return x;
         }
 
         private int DrawTemp(Graphics g, string text, float temp, int x, int y)
         {
-            Brush tempBrush = GetTempBrush(temp);
-            g.DrawString(text, MainFont, tempBrush, x, y);
-            SizeF ts = g.MeasureString(text, MainFont);
-            return x + (int)ts.Width + 6;
+            // Диапазон значения гарантирован Formatting.FormatTemperature (0..999).
+            return DrawValueSlot(g, text, "999C", GetTempBrush(temp), x, y) + 6;
+        }
+
+        // Рисует значение в слоте фиксированной ширины (по шаблону) с прижатием вправо.
+        // Ширина слота измеряется на текущем Graphics: при PerMonitorV2 она следует за DPI,
+        // поэтому пиксельную ширину нельзя кэшировать между кадрами.
+        private static int DrawValueSlot(Graphics g, string value, string template, Brush brush, int x, int y)
+        {
+            SizeF slot = g.MeasureString(template, MainFont);
+            int slotW = (int)Math.Ceiling(slot.Width);
+            var rect = new RectangleF(x, y, slotW, (float)Math.Ceiling(slot.Height));
+            g.DrawString(value, MainFont, brush, rect, ValueRightAligned);
+            return x + slotW;
         }
 
         private int DrawSeparator(Graphics g, int x, int y)
