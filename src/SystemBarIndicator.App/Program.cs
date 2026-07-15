@@ -151,6 +151,8 @@ namespace SystemBarIndicator
         private bool _hasGpu;
         private bool _hasGpuTemp;
 
+        private int _pendingBarWidth; // 0 — подгонка ширины окна не запланирована
+
         // Сглаживание и автомасштаб для «рваных» по природе индикаторов сети и диска.
         private readonly Ema _netDownEma = new(0.4f);
         private readonly Ema _netUpEma = new(0.4f);
@@ -244,7 +246,9 @@ namespace SystemBarIndicator
 
         private void PositionOnTaskbar()
         {
-            const int barWidth = 520;
+            // Фактическая ширина подгоняется под контент после первого обмера (ApplyBarWidth);
+            // здесь используем текущую, чтобы «Reset Position» не возвращал стартовые 520.
+            int barWidth = this.Width;
             const int margin = 10;
 
             var abd = new APPBARDATA { cbSize = (uint)Marshal.SizeOf<APPBARDATA>() };
@@ -276,7 +280,7 @@ namespace SystemBarIndicator
                 int sw = GetSystemMetrics(SM_CXSCREEN);
                 int sh = GetSystemMetrics(SM_CYSCREEN);
                 this.Size = new Size(barWidth, 32);
-                this.Location = new Point(sw - 530, sh - 40);
+                this.Location = new Point(sw - barWidth - margin, sh - 40);
                 BarEdge = TaskbarEdge.Bottom;
             }
 
@@ -428,6 +432,32 @@ namespace SystemBarIndicator
             x = DrawDualBars(e.Graphics, "D", _diskScale.Fraction(_diskReadEma.Value), _diskScale.Fraction(_diskWriteEma.Value), DiskReadBrush, DiskWriteBrush, x, y);
             x = DrawSeparator(e.Graphics, x, y);
             x = DrawDualBars(e.Graphics, "N", _netScale.Fraction(_netDownEma.Value), _netScale.Fraction(_netUpEma.Value), NetDownBrush, NetUpBrush, x, y);
+
+            // Ширина контента известна только после обмера в текущем DPI (слоты фиксированы,
+            // но их пиксельная ширина зависит от монитора, а состав секций — от «защёлок»).
+            // Подгоняем ширину окна вне цикла отрисовки, удерживая правый край на месте.
+            int desiredWidth = x + 8;
+            if (desiredWidth != this.Width && _pendingBarWidth != desiredWidth)
+            {
+                // Коалесцирование: в очереди один callback, применяется последний обмер
+                // (при смене DPI устаревшее значение перезаписывается до применения).
+                bool schedule = _pendingBarWidth == 0;
+                _pendingBarWidth = desiredWidth;
+                if (schedule)
+                    BeginInvoke(new Action(ApplyPendingBarWidth));
+            }
+        }
+
+        // Меняет ширину окна, сохраняя положение правого края (бар прижат к правой
+        // стороне панели задач, расти/сжиматься должен влево).
+        private void ApplyPendingBarWidth()
+        {
+            int width = _pendingBarWidth;
+            _pendingBarWidth = 0;
+            if (width <= 0 || width == this.Width || this.IsDisposed || !this.IsHandleCreated)
+                return;
+            int right = this.Left + this.Width;
+            this.SetBounds(right - width, this.Top, width, this.Height);
         }
 
         // Диск и сеть рисуем парой горизонтальных баров: ▼ чтение/загрузка, ▲ запись/отдача.
