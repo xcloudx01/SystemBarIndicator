@@ -12,11 +12,13 @@ jobs:
     runs-on: windows-latest
 
     steps:
+      # Мажоры v7/v6 работают на node24: v4 заявлены под node20, который на runner'ах
+      # объявлен устаревшим и принудительно подменяется (предупреждение в каждом прогоне).
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
