@@ -22,11 +22,23 @@ namespace SystemBarIndicator.Util
         /// Температура для полоски: NaN и отрицательные → "0C", выше 999 → "999C".
         /// Диапазон гарантирует, что строка не шире шаблона слота "999C".
         /// </summary>
-        public static string FormatTemperature(float celsius)
+        public static string FormatTemperature(float celsius) => FormatTemperature(celsius, fahrenheit: false);
+
+        /// <summary>
+        /// Температура для полоски в выбранных единицах. Значение зажимается в 0..999
+        /// уже ПОСЛЕ перевода, поэтому строка не шире шаблона слота
+        /// (см. <see cref="TemperatureSlotTemplate"/>).
+        /// </summary>
+        public static string FormatTemperature(float celsius, bool fahrenheit)
         {
             float t = float.IsNaN(celsius) ? 0f : Math.Clamp(celsius, 0f, 999f);
-            return string.Format(CultureInfo.InvariantCulture, "{0:F0}C", t);
+            if (fahrenheit)
+                t = Math.Clamp(t * 9f / 5f + 32f, 0f, 999f);
+            return string.Format(CultureInfo.InvariantCulture, "{0:F0}{1}", t, fahrenheit ? 'F' : 'C');
         }
+
+        /// <summary>Самая широкая возможная строка температуры — шаблон слота фиксированной ширины.</summary>
+        public static string TemperatureSlotTemplate(bool fahrenheit) => fahrenheit ? "999F" : "999C";
 
         /// <summary>
         /// Форматирует скорость передачи данных, заданную в КБ/с, выбирая единицу:

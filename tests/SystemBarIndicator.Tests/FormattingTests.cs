@@ -51,5 +51,35 @@ namespace SystemBarIndicator.Tests
         {
             Assert.Equal(expected, Formatting.FormatTemperature(value));
         }
+
+        [Theory]
+        [InlineData(0f, "32F")]
+        [InlineData(100f, "212F")]
+        [InlineData(45.6f, "114F")]         // 45.6C = 114.08F
+        [InlineData(600f, "999F")]          // clamp сверху уже ПОСЛЕ перевода
+        [InlineData(-10f, "32F")]           // clamp снизу до 0C, затем перевод
+        [InlineData(float.NaN, "32F")]
+        public void FormatTemperature_Fahrenheit_ConvertsAndClamps(float celsius, string expected)
+        {
+            Assert.Equal(expected, Formatting.FormatTemperature(celsius, fahrenheit: true));
+        }
+
+        [Fact]
+        public void FormatTemperature_CelsiusOverloadMatchesExplicitCelsius()
+        {
+            Assert.Equal(Formatting.FormatTemperature(63f), Formatting.FormatTemperature(63f, fahrenheit: false));
+        }
+
+        [Fact]
+        public void TemperatureSlotTemplate_FitsAnyFormattedValue()
+        {
+            // Шаблон слота должен быть не короче самой длинной возможной строки.
+            foreach (bool fahrenheit in new[] { false, true })
+            {
+                string template = Formatting.TemperatureSlotTemplate(fahrenheit);
+                foreach (float c in new[] { 0f, 9f, 42f, 99f, 150f, 999f, float.NaN })
+                    Assert.True(Formatting.FormatTemperature(c, fahrenheit).Length <= template.Length);
+            }
+        }
     }
 }

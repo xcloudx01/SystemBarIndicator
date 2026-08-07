@@ -1,0 +1,242 @@
+using System;
+using System.IO;
+using SystemBarIndicator.Configuration;
+using Xunit;
+
+namespace SystemBarIndicator.Tests
+{
+    public class SettingsStoreTests : IDisposable
+    {
+        private readonly string _dir;
+        private readonly string _path;
+
+        public SettingsStoreTests()
+        {
+            // Отдельный каталог на тест: атомарная запись оставляет рядом .tmp,
+            // а GetTempFileName ещё и создаёт пустой файл — обоих эффектов не хотим.
+            _dir = Path.Combine(Path.GetTempPath(), "sbi-tests-" + Path.GetRandomFileName());
+            Directory.CreateDirectory(_dir);
+            _path = Path.Combine(_dir, SettingsStore.FileName);
+        }
+
+        public void Dispose()
+        {
+            try { Directory.Delete(_dir, recursive: true); }
+            catch (IOException) { }
+        }
+
+        [Fact]
+        public void Load_MissingFile_ReturnsDefaultsWithoutError()
+        {
+            var s = SettingsStore.Load(_path, out var error);
+
+            Assert.Null(error);
+            Assert.Equal(AppSettings.DefaultOpacity, s.Opacity, 6);
+            Assert.Equal(ThemeNames.Dark, s.Theme);
+            Assert.Null(s.BarRight);
+            Assert.Null(s.BarTop);
+        }
+
+        [Fact]
+        public void SaveThenLoad_RoundTripsEveryField()
+        {
+            var source = new AppSettings
+            {
+                BarRight = 1885,
+                BarTop = 1035,
+                Opacity = 0.71,
+                Theme = ThemeNames.Custom,
+                BackgroundColor = "#FF203040",
+                FontScale = 1.25,
+                UpdateIntervalMs = 2000,
+                UseFahrenheit = true,
+                ShowCpu = false,
+                ShowCpuTemp = false,
+                ShowRam = false,
+                ShowGpu = false,
+                ShowGpuTemp = false,
+                ShowDisk = false,
+                ShowNetwork = true
+            };
+
+            SettingsStore.Save(_path, source);
+            var loaded = SettingsStore.Load(_path, out var error);
+
+            Assert.Null(error);
+            Assert.Equal(1885, loaded.BarRight);
+            Assert.Equal(1035, loaded.BarTop);
+            Assert.Equal(0.71, loaded.Opacity, 6);
+            Assert.Equal(ThemeNames.Custom, loaded.Theme);
+            Assert.Equal("#FF203040", loaded.BackgroundColor);
+            Assert.Equal(1.25, loaded.FontScale, 6);
+            Assert.Equal(2000, loaded.UpdateIntervalMs);
+            Assert.True(loaded.UseFahrenheit);
+            Assert.False(loaded.ShowCpu);
+            Assert.False(loaded.ShowCpuTemp);
+            Assert.False(loaded.ShowRam);
+            Assert.False(loaded.ShowGpu);
+            Assert.False(loaded.ShowGpuTemp);
+            Assert.False(loaded.ShowDisk);
+            Assert.True(loaded.ShowNetwork);
+        }
+
+        [Theory]
+        [InlineData(nameof(AppSettings.ShowCpu))]
+        [InlineData(nameof(AppSettings.ShowCpuTemp))]
+        [InlineData(nameof(AppSettings.ShowRam))]
+        [InlineData(nameof(AppSettings.ShowGpu))]
+        [InlineData(nameof(AppSettings.ShowGpuTemp))]
+        [InlineData(nameof(AppSettings.ShowDisk))]
+        [InlineData(nameof(AppSettings.ShowNetwork))]
+        public void Save_WritesEverySectionFlag(string propertyName)
+        {
+            // Флаги должны быть именно свойствами: обычные поля System.Text.Json
+            // молча пропустил бы, и состав секций не сохранялся бы вовсе.
+            SettingsStore.Save(_path, new AppSettings());
+            Assert.Contains(propertyName, File.ReadAllText(_path), StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Load_PartialJson_KeepsDefaultsForMissingFields()
+        {
+            File.WriteAllText(_path, "{\"Opacity\": 0.5}");
+
+            var s = SettingsStore.Load(_path, out var error);
+
+            Assert.Null(error);
+            Assert.Equal(0.5, s.Opacity, 6);
+            Assert.Equal(ThemeNames.Dark, s.Theme);
+            Assert.Equal(AppSettings.DefaultIntervalMs, s.UpdateIntervalMs);
+            Assert.True(s.ShowNetwork);
+        }
+
+        [Fact]
+        public void Load_BrokenJson_ReturnsDefaultsAndReportsError()
+        {
+            File.WriteAllText(_path, "{{{ это не json");
+
+            var s = SettingsStore.Load(_path, out var error);
+
+            Assert.NotNull(error);
+            Assert.Equal(AppSettings.DefaultOpacity, s.Opacity, 6);
+        }
+
+        [Fact]
+        public void Load_NullDocument_ReturnsDefaults()
+        {
+            // "null" — валидный JSON, дающий null: без явной проверки был бы NullReferenceException.
+            File.WriteAllText(_path, "null");
+
+            var s = SettingsStore.Load(_path, out var error);
+
+            Assert.Null(error);
+            Assert.Equal(ThemeNames.Dark, s.Theme);
+        }
+
+        [Fact]
+        public void Load_EmptyFile_ReturnsDefaults()
+        {
+            File.WriteAllText(_path, "   ");
+
+            var s = SettingsStore.Load(_path, out var error);
+
+            Assert.Null(error);
+            Assert.Equal(AppSettings.DefaultOpacity, s.Opacity, 6);
+        }
+
+        [Fact]
+        public void Load_NullStringProperty_DoesNotProduceNullTheme()
+        {
+            // Аннотации nullable на десериализацию не влияют — null долетит до свойства.
+            File.WriteAllText(_path, "{\"Theme\": null, \"BackgroundColor\": null}");
+
+            var s = SettingsStore.Load(_path, out var error);
+
+            Assert.Null(error);
+            Assert.Equal(ThemeNames.Dark, s.Theme);
+            Assert.Equal(ColorCodec.Default, s.BackgroundColor);
+        }
+
+        [Fact]
+        public void Load_OutOfRangeValues_AreNormalized()
+        {
+            File.WriteAllText(_path, "{\"Opacity\": 42, \"FontScale\": 0.01, \"UpdateIntervalMs\": 137, \"Theme\": \"neon\"}");
+
+            var s = SettingsStore.Load(_path, out _);
+
+            Assert.Equal(AppSettings.MaxOpacity, s.Opacity, 6);
+            Assert.Equal(AppSettings.MinFontScale, s.FontScale, 6);
+            Assert.Equal(500, s.UpdateIntervalMs);
+            Assert.Equal(ThemeNames.Dark, s.Theme);
+        }
+
+        [Fact]
+        public void Load_UnknownFields_AreIgnored()
+        {
+            File.WriteAllText(_path, "{\"Opacity\": 0.8, \"СовершенноНовоеПоле\": [1,2,3]}");
+
+            var s = SettingsStore.Load(_path, out var error);
+
+            Assert.Null(error);
+            Assert.Equal(0.8, s.Opacity, 6);
+        }
+
+        [Fact]
+        public void Load_JsonWithCommentsAndTrailingComma_IsAccepted()
+        {
+            // Файл заявлен как редактируемый руками — мелкие вольности не должны его ронять.
+            File.WriteAllText(_path, "{\n  // прозрачность\n  \"Opacity\": 0.6,\n}");
+
+            var s = SettingsStore.Load(_path, out var error);
+
+            Assert.Null(error);
+            Assert.Equal(0.6, s.Opacity, 6);
+        }
+
+        [Fact]
+        public void Save_NonFiniteValues_DoNotThrow()
+        {
+            // NaN нельзя записать в JSON — Save обязан сохранять нормализованную копию.
+            var broken = new AppSettings { Opacity = double.NaN, FontScale = double.PositiveInfinity };
+
+            SettingsStore.Save(_path, broken);
+            var loaded = SettingsStore.Load(_path, out var error);
+
+            Assert.Null(error);
+            Assert.Equal(AppSettings.DefaultOpacity, loaded.Opacity, 6);
+            Assert.Equal(AppSettings.DefaultFontScale, loaded.FontScale, 6);
+        }
+
+        [Fact]
+        public void Save_OverwritesPreviousFileAndLeavesNoTempBehind()
+        {
+            SettingsStore.Save(_path, new AppSettings { Opacity = 0.5 });
+            SettingsStore.Save(_path, new AppSettings { Opacity = 0.9 });
+
+            var s = SettingsStore.Load(_path, out _);
+
+            Assert.Equal(0.9, s.Opacity, 6);
+            Assert.False(File.Exists(_path + ".tmp"));
+        }
+
+        [Fact]
+        public void Save_CreatesMissingDirectory()
+        {
+            string nested = Path.Combine(_dir, "sub", "dir", SettingsStore.FileName);
+
+            SettingsStore.Save(nested, new AppSettings());
+
+            Assert.True(File.Exists(nested));
+        }
+
+        [Fact]
+        public void DefaultPath_PointsNextToApplicationLog()
+        {
+            string expectedDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SystemBarIndicator");
+
+            Assert.Equal(Path.Combine(expectedDir, SettingsStore.FileName), SettingsStore.DefaultPath);
+        }
+    }
+}

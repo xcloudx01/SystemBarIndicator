@@ -52,5 +52,30 @@ namespace SystemBarIndicator.Tests
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => new Ema(alpha));
         }
+
+        [Fact]
+        public void Alpha_CanBeChangedOnTheFly_KeepingAccumulatedValue()
+        {
+            // Смена интервала опроса меняет alpha, но не должна сбрасывать сглаженное значение.
+            var ema = new Ema(0.5f);
+            ema.Update(100f);
+
+            ema.Alpha = 0.25f;
+
+            Assert.Equal(0.25f, ema.Alpha);
+            Assert.Equal(100f, ema.Value);
+            // 100 + 0.25 * (0 - 100) = 75
+            Assert.Equal(75f, ema.Update(0f));
+        }
+
+        [Theory]
+        [InlineData(0f)]
+        [InlineData(-0.1f)]
+        [InlineData(1.1f)]
+        public void Alpha_RejectsValueOutOfRange(float alpha)
+        {
+            var ema = new Ema(0.4f);
+            Assert.Throws<ArgumentOutOfRangeException>(() => ema.Alpha = alpha);
+        }
     }
 }

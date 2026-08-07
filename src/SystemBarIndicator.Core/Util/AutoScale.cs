@@ -10,7 +10,7 @@ namespace SystemBarIndicator.Util
     public sealed class AutoScale
     {
         private readonly float _floor;
-        private readonly float _decay;
+        private float _decay;
 
         /// <param name="floor">Минимальная полная шкала (значение никогда не опускается ниже).</param>
         /// <param name="decay">Множитель затухания за шаг в (0..1), например 0.97.</param>
@@ -18,11 +18,24 @@ namespace SystemBarIndicator.Util
         {
             if (floor <= 0f)
                 throw new ArgumentOutOfRangeException(nameof(floor), floor, "floor должен быть положительным.");
-            if (decay <= 0f || decay >= 1f)
-                throw new ArgumentOutOfRangeException(nameof(decay), decay, "decay должен быть в (0..1).");
             _floor = floor;
-            _decay = decay;
+            Decay = decay;
             Value = floor;
+        }
+
+        /// <summary>
+        /// Множитель затухания за шаг (0..1). Меняется на лету при смене интервала опроса —
+        /// см. <see cref="SmoothingRates.DecayForInterval"/>. Текущая шкала сохраняется.
+        /// </summary>
+        public float Decay
+        {
+            get => _decay;
+            set
+            {
+                if (value <= 0f || value >= 1f)
+                    throw new ArgumentOutOfRangeException(nameof(value), value, "decay должен быть в (0..1).");
+                _decay = value;
+            }
         }
 
         /// <summary>Текущая полная шкала.</summary>

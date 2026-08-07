@@ -59,5 +59,29 @@ namespace SystemBarIndicator.Tests
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => new AutoScale(floor, decay));
         }
+
+        [Fact]
+        public void Decay_CanBeChangedOnTheFly_KeepingCurrentScale()
+        {
+            // Смена интервала опроса меняет затухание, но не текущую шкалу.
+            var scale = new AutoScale(64f, 0.9f);
+            scale.Update(1000f);
+
+            scale.Decay = 0.5f;
+
+            Assert.Equal(0.5f, scale.Decay);
+            Assert.Equal(1000f, scale.Value);
+            Assert.Equal(500f, scale.Update(0f));
+        }
+
+        [Theory]
+        [InlineData(0f)]
+        [InlineData(1f)]
+        [InlineData(-0.5f)]
+        public void Decay_RejectsValueOutOfRange(float decay)
+        {
+            var scale = new AutoScale(64f, 0.97f);
+            Assert.Throws<ArgumentOutOfRangeException>(() => scale.Decay = decay);
+        }
     }
 }

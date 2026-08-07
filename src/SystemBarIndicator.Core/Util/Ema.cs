@@ -8,7 +8,7 @@ namespace SystemBarIndicator.Util
     /// </summary>
     public sealed class Ema
     {
-        private readonly float _alpha;
+        private float _alpha;
         private bool _initialized;
 
         /// <param name="alpha">
@@ -17,9 +17,23 @@ namespace SystemBarIndicator.Util
         /// </param>
         public Ema(float alpha)
         {
-            if (alpha <= 0f || alpha > 1f)
-                throw new ArgumentOutOfRangeException(nameof(alpha), alpha, "alpha должен быть в (0..1].");
-            _alpha = alpha;
+            Alpha = alpha;
+        }
+
+        /// <summary>
+        /// Коэффициент сглаживания (0..1]. Меняется на лету при смене интервала опроса:
+        /// одно и то же «время сглаживания» требует разного alpha при разном шаге
+        /// (см. <see cref="SmoothingRates.AlphaForInterval"/>). Накопленное значение сохраняется.
+        /// </summary>
+        public float Alpha
+        {
+            get => _alpha;
+            set
+            {
+                if (value <= 0f || value > 1f)
+                    throw new ArgumentOutOfRangeException(nameof(value), value, "alpha должен быть в (0..1].");
+                _alpha = value;
+            }
         }
 
         public float Value { get; private set; }

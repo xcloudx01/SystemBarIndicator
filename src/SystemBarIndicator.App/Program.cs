@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using SystemBarIndicator.Configuration;
 using SystemBarIndicator.Models;
 using SystemBarIndicator.Monitoring;
 using SystemBarIndicator.Sensors;
@@ -98,25 +99,26 @@ namespace SystemBarIndicator
         private const int WM_NCHITTEST = 0x0084;
         private const int HTCAPTION = 2;
         private const int WM_WINDOWPOSCHANGING = 0x0046;
-        private const int WM_LBUTTONDOWN = 0x0201;
-        private const int WM_LBUTTONUP = 0x0202;
+        private const int WM_DISPLAYCHANGE = 0x007E;
+        // Окно отдаёт HTCAPTION на любой hit-test, поэтому нажатие система сразу
+        // превращает в SC_MOVE: клиентских WM_LBUTTONDOWN/UP не бывает, неклиентский
+        // WM_NCLBUTTONUP съедается, а WM_ENTERSIZEMOVE на клике без движения не приходит
+        // вовсе. Единственная точка, где виден весь жест целиком, — сам SC_MOVE.
+        private const int WM_SYSCOMMAND = 0x0112;
+        private const int SC_MOVE = 0xF010;
 
-        // --- Кэшированные ресурсы рисования (живут на всё время работы приложения) ---
-        private static readonly Font MainFont = new Font("Segoe UI", 9f, FontStyle.Regular);
-        private static readonly Font SmallFont = new Font("Segoe UI", 7.5f, FontStyle.Regular);
-        private static readonly Brush DimBrush = new SolidBrush(Color.FromArgb(150, 150, 150));
-        private static readonly Pen SeparatorPen = new Pen(Color.FromArgb(60, 60, 60), 1);
-        private static readonly Brush BrushRed = new SolidBrush(Color.FromArgb(244, 67, 54));
-        private static readonly Brush BrushOrange = new SolidBrush(Color.FromArgb(255, 152, 0));
-        private static readonly Brush BrushYellow = new SolidBrush(Color.FromArgb(255, 193, 7));
-        private static readonly Brush BrushGreen = new SolidBrush(Color.FromArgb(76, 175, 80));
-        // Цвета сети совпадают с графиками в оверлее (Net DL / Net UL).
-        private static readonly Brush NetDownBrush = new SolidBrush(Color.FromArgb(237, 137, 54));
-        private static readonly Brush NetUpBrush = new SolidBrush(Color.FromArgb(38, 198, 218));
-        // Диск — отдельная цветовая пара (фиолетовый/розовый), чтобы не путать с сетью.
-        private static readonly Brush DiskReadBrush = new SolidBrush(Color.FromArgb(171, 71, 188));
-        private static readonly Brush DiskWriteBrush = new SolidBrush(Color.FromArgb(236, 64, 122));
-        private static readonly Brush NetTrackBrush = new SolidBrush(Color.FromArgb(55, 55, 62));
+        // --- Геометрия полоски ---
+        private const int EdgePad = 8;      // отступ от краёв окна
+        private const int ValueGap = 10;    // после процентного значения
+        private const int TempGap = 6;      // после температуры
+        private const int SeparatorGap = 8; // после разделителя
+
+        // Базовые коэффициенты сглаживания откалиброваны под тик в 1 секунду;
+        // при другом интервале пересчитываются (SmoothingRates).
+        private const float NetAlphaPerSecond = 0.4f;
+        private const float DiskAlphaPerSecond = 0.4f;
+        private const float ScaleDecayPerSecond = 0.97f;
+
         // Числовые значения рисуются в слоте фиксированной ширины с прижатием вправо,
         // чтобы секции не «дышали» при смене числа разрядов (9% ↔ 10%).
         private static readonly StringFormat ValueRightAligned = new StringFormat(StringFormat.GenericDefault)
@@ -125,8 +127,6 @@ namespace SystemBarIndicator
             FormatFlags = StringFormatFlags.NoWrap
         };
 
-        private Point _mouseDownLocation;
-        private bool _mouseDown;
 
         // --- Сенсоры ---
         private CpuSensor? _cpuSensor;
@@ -138,12 +138,24 @@ namespace SystemBarIndicator
         // --- Состояние и UI ---
         private readonly Timer _timer;
         private readonly Timer _topmostTimer;
+        private readonly Timer _saveTimer;
         private readonly NotifyIcon _trayIcon;
         private readonly DataHistory _history;
         private GraphOverlay? _graphOverlay;
+        private SettingsForm? _settingsForm;
         private readonly Icon _appIcon;
 
         private readonly SensorData _current = new();
+
+        // --- Настройки ---
+        private readonly string _settingsPath = SettingsStore.DefaultPath;
+        private AppSettings _settings;
+        private BarTheme _theme;
+        private bool _settingsDirty;
+        // Позиция считается заданной пользователем, только если он сам перетащил бар.
+        // Иначе бар обязан следовать за панелью задач при каждом запуске.
+        private bool _positionUserDefined;
+        private bool _positionTrackingReady;
 
         // «Защёлки» доступности датчиков: однажды появившаяся секция больше не исчезает,
         // чтобы кратковременный сбой датчика (null → 0) не сдвигал компоновку.
@@ -154,14 +166,19 @@ namespace SystemBarIndicator
         private int _pendingBarWidth; // 0 — подгонка ширины окна не запланирована
 
         // Сглаживание и автомасштаб для «рваных» по природе индикаторов сети и диска.
-        private readonly Ema _netDownEma = new(0.4f);
-        private readonly Ema _netUpEma = new(0.4f);
-        private readonly AutoScale _netScale = new(floor: 64f, decay: 0.97f);   // КБ/с
-        private readonly Ema _diskReadEma = new(0.4f);
-        private readonly Ema _diskWriteEma = new(0.4f);
-        private readonly AutoScale _diskScale = new(floor: 8f, decay: 0.97f);   // МБ/с
+        private readonly Ema _netDownEma = new(NetAlphaPerSecond);
+        private readonly Ema _netUpEma = new(NetAlphaPerSecond);
+        private readonly AutoScale _netScale = new(floor: 64f, decay: ScaleDecayPerSecond);   // КБ/с
+        private readonly Ema _diskReadEma = new(DiskAlphaPerSecond);
+        private readonly Ema _diskWriteEma = new(DiskAlphaPerSecond);
+        private readonly AutoScale _diskScale = new(floor: 8f, decay: ScaleDecayPerSecond);   // МБ/с
 
         public TaskbarEdge BarEdge { get; private set; } = TaskbarEdge.Bottom;
+
+        /// <summary>Доступность датчиков — окно настроек помечает ими недоступные секции.</summary>
+        public bool HasCpuTempSensor => _hasCpuTemp;
+        public bool HasGpuSensor => _hasGpu;
+        public bool HasGpuTempSensor => _hasGpuTemp;
 
         private SensorData GetCurrentData() => _current;
 
@@ -171,13 +188,22 @@ namespace SystemBarIndicator
 
             _history = new DataHistory(120);
 
+            _settings = SettingsStore.Load(_settingsPath, out var settingsError);
+            if (settingsError != null)
+                Logger.Error("SettingsStore.Load", settingsError);
+            _positionUserDefined = _settings.BarRight.HasValue && _settings.BarTop.HasValue;
+            _theme = BarTheme.Create(_settings);
+
             _appIcon = LoadAppIcon();
             this.Icon = _appIcon;
             this.FormBorderStyle = FormBorderStyle.None;
+            // Всё окно отдаёт HTCAPTION, поэтому двойной клик по нему система приняла бы
+            // за двойной клик по заголовку и развернула окно — снимаем саму возможность.
+            this.MaximizeBox = false;
             this.ShowInTaskbar = true;
             this.TopMost = true;
-            this.BackColor = Color.FromArgb(25, 25, 25);
-            this.Opacity = 0.92;
+            this.BackColor = _theme.Background;
+            this.Opacity = _settings.Opacity;
             this.DoubleBuffered = true;
             this.Size = new Size(520, 32);
             this.StartPosition = FormStartPosition.Manual;
@@ -187,8 +213,9 @@ namespace SystemBarIndicator
                     _graphOverlay.PositionAboveParent();
             };
 
-            _timer = new Timer { Interval = 1000 };
+            _timer = new Timer { Interval = _settings.UpdateIntervalMs };
             _timer.Tick += TimerTick;
+            ApplySmoothingRates(_settings.UpdateIntervalMs);
             _timer.Start();
 
             // Событийное удержание поверх обеспечивает WM_WINDOWPOSCHANGING;
@@ -196,6 +223,11 @@ namespace SystemBarIndicator
             _topmostTimer = new Timer { Interval = 1000 };
             _topmostTimer.Tick += (s, e) => ForceTopMost();
             _topmostTimer.Start();
+
+            // Запись настроек откладывается: перетаскивание бара и движение ползунка
+            // не должны устраивать шторм обращений к диску.
+            _saveTimer = new Timer { Interval = 1500 };
+            _saveTimer.Tick += (s, e) => { _saveTimer.Stop(); FlushSettings(); };
 
             _trayIcon = new NotifyIcon
             {
@@ -207,7 +239,8 @@ namespace SystemBarIndicator
 
             var menu = new ContextMenuStrip();
             menu.Items.Add("Graphs", null, (s, e) => OpenGraphOverlay());
-            menu.Items.Add("Reset Position", null, (s, e) => PositionOnTaskbar());
+            menu.Items.Add("Settings...", null, (s, e) => OpenSettings());
+            menu.Items.Add("Reset Position", null, (s, e) => ResetPosition());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Exit", null, (s, e) => { _trayIcon.Visible = false; Application.Exit(); });
             _trayIcon.ContextMenuStrip = menu;
@@ -241,6 +274,8 @@ namespace SystemBarIndicator
         {
             base.OnLoad(e);
             PositionOnTaskbar();
+            TryRestoreSavedPosition();
+            _positionTrackingReady = true;
             UpdateData();
         }
 
@@ -285,6 +320,64 @@ namespace SystemBarIndicator
             }
 
             ForceTopMost();
+        }
+
+        /// <summary>
+        /// Возвращает бар туда, где пользователь его оставил. Восстанавливается ПРАВЫЙ край:
+        /// ширина окна ещё стартовая и будет подогнана под контент после первого кадра,
+        /// а подгонка (<see cref="ApplyPendingBarWidth"/>) удерживает именно правый край.
+        /// Высоту не восстанавливаем — она считается по панели задач.
+        /// </summary>
+        private void TryRestoreSavedPosition()
+        {
+            if (!_settings.BarRight.HasValue || !_settings.BarTop.HasValue)
+                return;
+
+            var screens = ScreenBounds();
+            var candidate = new Rectangle(_settings.BarRight.Value - this.Width, _settings.BarTop.Value, this.Width, this.Height);
+
+            if (!WindowPlacement.IsUsable(candidate, screens))
+            {
+                var clamped = WindowPlacement.ClampToScreens(candidate, screens);
+                if (!WindowPlacement.IsUsable(clamped, screens))
+                {
+                    Logger.Warn($"Сохранённая позиция бара недоступна ({candidate}), встаём по панели задач.");
+                    return;
+                }
+
+                // Запоминаем починенную позицию, иначе в файле навсегда останется
+                // недостижимая точка и клэмп будет повторяться при каждом запуске.
+                Logger.Warn($"Сохранённая позиция бара скорректирована под текущие экраны: {candidate} → {clamped}.");
+                candidate = clamped;
+                _settings.BarRight = clamped.Right;
+                _settings.BarTop = clamped.Top;
+                MarkSettingsDirty();
+            }
+
+            this.Location = candidate.Location;
+            UpdateBarEdgeFromPosition();
+            ForceTopMost();
+        }
+
+        /// <summary>
+        /// Куда раскрывать оверлей, определяем по фактическому положению бара: после
+        /// перетаскивания в верхнюю половину экрана графики должны уходить вниз.
+        /// </summary>
+        private void UpdateBarEdgeFromPosition()
+        {
+            var area = Screen.FromRectangle(this.Bounds).WorkingArea;
+            BarEdge = this.Top + this.Height / 2 < area.Top + area.Height / 2
+                ? TaskbarEdge.Top
+                : TaskbarEdge.Bottom;
+        }
+
+        private static Rectangle[] ScreenBounds()
+        {
+            var screens = Screen.AllScreens;
+            var bounds = new Rectangle[screens.Length];
+            for (int i = 0; i < screens.Length; i++)
+                bounds[i] = screens[i].Bounds;
+            return bounds;
         }
 
         private void ForceTopMost()
@@ -380,7 +473,7 @@ namespace SystemBarIndicator
         {
             if (_graphOverlay == null || _graphOverlay.IsDisposed)
             {
-                _graphOverlay = new GraphOverlay(_history, GetCurrentData, this);
+                _graphOverlay = new GraphOverlay(_history, GetCurrentData, this, _theme, _settings);
                 _graphOverlay.PositionAboveParent();
                 _graphOverlay.FormClosed += (s, e) => { _graphOverlay = null; };
                 _graphOverlay.Show();
@@ -400,43 +493,267 @@ namespace SystemBarIndicator
             }
         }
 
+        // --- Настройки ---
+
+        /// <summary>Копия текущих настроек — окно настроек правит её, не трогая рабочую.</summary>
+        public AppSettings CurrentSettings => _settings.Clone();
+
+        private void OpenSettings()
+        {
+            if (_settingsForm != null && !_settingsForm.IsDisposed)
+            {
+                _settingsForm.Activate();
+                return;
+            }
+
+            // Владелец, а не TopMost: бар принудительно всплывает в топ z-order раз в секунду,
+            // и обычное окно он бы перекрыл, а владение задаёт порядок надёжно.
+            _settingsForm = new SettingsForm(this);
+            _settingsForm.FormClosed += (s, e) => { _settingsForm = null; FlushSettings(); };
+            _settingsForm.Show(this);
+        }
+
+        /// <summary>
+        /// Применяет настройки внешнего вида. Положение бара сюда не входит:
+        /// им управляют только перетаскивание и «Reset Position», иначе открытое окно
+        /// настроек затирало бы позицию своим устаревшим снимком.
+        /// </summary>
+        public void ApplySettings(AppSettings incoming)
+        {
+            ArgumentNullException.ThrowIfNull(incoming);
+
+            var next = incoming.Normalized();
+            next.BarRight = _settings.BarRight;
+            next.BarTop = _settings.BarTop;
+
+            bool rebuildTheme = next.DiffersInAppearance(_settings);
+            var previous = _settings;
+            _settings = next;
+
+            if (rebuildTheme)
+            {
+                // Сначала подменяем ссылку, потом освобождаем старые ресурсы: отрисовка
+                // идёт в этом же потоке синхронно, недорисованного кадра быть не может.
+                var oldTheme = _theme;
+                _theme = BarTheme.Create(next);
+                _graphOverlay?.ApplyTheme(_theme, next);
+                oldTheme.Dispose();
+                this.BackColor = _theme.Background;
+            }
+            else
+            {
+                _graphOverlay?.ApplyTheme(_theme, next);
+            }
+
+            if (this.Opacity != next.Opacity)
+                this.Opacity = next.Opacity;
+
+            if (previous.UpdateIntervalMs != next.UpdateIntervalMs)
+            {
+                _timer.Interval = next.UpdateIntervalMs;
+                ApplySmoothingRates(next.UpdateIntervalMs);
+            }
+
+            this.Invalidate();
+            MarkSettingsDirty();
+        }
+
+        /// <summary>
+        /// Приводит сглаживание к новому шагу опроса: базовые коэффициенты откалиброваны
+        /// под 1 секунду, иначе при 0.5 с индикаторы стали бы вдвое инертнее, а при 5 с — рваными.
+        /// </summary>
+        private void ApplySmoothingRates(int intervalMs)
+        {
+            float netAlpha = SmoothingRates.AlphaForInterval(NetAlphaPerSecond, intervalMs);
+            float diskAlpha = SmoothingRates.AlphaForInterval(DiskAlphaPerSecond, intervalMs);
+            float decay = SmoothingRates.DecayForInterval(ScaleDecayPerSecond, intervalMs);
+
+            _netDownEma.Alpha = netAlpha;
+            _netUpEma.Alpha = netAlpha;
+            _diskReadEma.Alpha = diskAlpha;
+            _diskWriteEma.Alpha = diskAlpha;
+            _netScale.Decay = decay;
+            _diskScale.Decay = decay;
+        }
+
+        private void MarkSettingsDirty()
+        {
+            _settingsDirty = true;
+            _saveTimer.Stop();
+            _saveTimer.Start();
+        }
+
+        private void FlushSettings()
+        {
+            if (!_settingsDirty)
+                return;
+
+            _settingsDirty = false;
+            try
+            {
+                SettingsStore.Save(_settingsPath, _settings);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("SettingsStore.Save", ex);
+            }
+        }
+
+        // --- Положение бара ---
+
+        private void ResetPosition()
+        {
+            _settings.BarRight = null;
+            _settings.BarTop = null;
+            _positionUserDefined = false;
+            PositionOnTaskbar();
+            MarkSettingsDirty();
+            FlushSettings();
+        }
+
+        /// <summary>
+        /// Конец перетаскивания. Позицию пишем только когда она действительно
+        /// изменилась — иначе каждое касание бара тревожило бы диск.
+        /// </summary>
+        protected override void OnResizeEnd(EventArgs e)
+        {
+            base.OnResizeEnd(e);
+            if (!_positionTrackingReady)
+                return;
+
+            int right = this.Left + this.Width;
+            if (_settings.BarRight == right && _settings.BarTop == this.Top)
+                return;
+
+            _settings.BarRight = right;
+            _settings.BarTop = this.Top;
+            _positionUserDefined = true;
+            UpdateBarEdgeFromPosition();
+            MarkSettingsDirty();
+        }
+
+        /// <summary>
+        /// Смена конфигурации мониторов: бар мог остаться на исчезнувшем экране.
+        /// Если позицию не задавал пользователь — просто встаём обратно по панели задач.
+        /// </summary>
+        private void ReconcilePositionWithScreens()
+        {
+            if (this.IsDisposed || !this.IsHandleCreated)
+                return;
+
+            if (!_positionUserDefined)
+            {
+                PositionOnTaskbar();
+                return;
+            }
+
+            var screens = ScreenBounds();
+            if (!WindowPlacement.IsUsable(this.Bounds, screens))
+            {
+                var clamped = WindowPlacement.ClampToScreens(this.Bounds, screens);
+                if (WindowPlacement.IsUsable(clamped, screens))
+                {
+                    this.Location = clamped.Location;
+                    _settings.BarRight = this.Left + this.Width;
+                    _settings.BarTop = this.Top;
+                    MarkSettingsDirty();
+                }
+                else
+                {
+                    Logger.Warn("После смены конфигурации мониторов бар не помещается — возврат к панели задач.");
+                    PositionOnTaskbar();
+                    return;
+                }
+            }
+
+            UpdateBarEdgeFromPosition();
+        }
+
+        // --- Отрисовка ---
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-            int x = 8;
-            int y = (this.Height - 16) / 2;
+            var s = _settings;
 
-            x = DrawSection(e.Graphics, "CPU", Formatting.FormatPercent(_current.CpuUsage), _current.CpuUsage / 100f, x, y);
-            if (_hasCpuTemp)
+            // Высота строки меряется на текущем Graphics: при PerMonitorV2 она следует
+            // за DPI монитора, на котором окно сейчас, — кэшировать её нельзя.
+            int lineHeight = (int)Math.Ceiling(g.MeasureString("100%", _theme.MainFont).Height);
+            int y = (this.Height - lineHeight) / 2;
+
+            int x = EdgePad;
+            int trailingGap = 0;
+            bool anyDrawn = false;
+
+            bool cpuTemp = s.ShowCpuTemp && _hasCpuTemp;
+            if (s.ShowCpu || cpuTemp)
             {
-                x = DrawTemp(e.Graphics, Formatting.FormatTemperature(_current.CpuTemperature), _current.CpuTemperature, x, y);
-            }
-            x = DrawSeparator(e.Graphics, x, y);
-
-            x = DrawSection(e.Graphics, "RAM", Formatting.FormatPercent(_current.RamUsage), _current.RamUsage / 100f, x, y);
-            x = DrawSeparator(e.Graphics, x, y);
-
-            if (_hasGpu)
-            {
-                x = DrawSection(e.Graphics, "GPU", Formatting.FormatPercent(_current.GpuUsage), _current.GpuUsage / 100f, x, y);
-                if (_hasGpuTemp)
+                x = Separate(g, x, y, lineHeight, ref anyDrawn);
+                if (s.ShowCpu)
                 {
-                    x = DrawTemp(e.Graphics, Formatting.FormatTemperature(_current.GpuTemperature), _current.GpuTemperature, x, y);
+                    x = DrawSection(g, "CPU", Formatting.FormatPercent(_current.CpuUsage), _current.CpuUsage / 100f, x, y, lineHeight);
+                    x += ValueGap;
+                    trailingGap = ValueGap;
                 }
-                x = DrawSeparator(e.Graphics, x, y);
+                if (cpuTemp)
+                {
+                    x = DrawTemp(g, _current.CpuTemperature, x, y, lineHeight);
+                    x += TempGap;
+                    trailingGap = TempGap;
+                }
             }
 
-            x = DrawDualBars(e.Graphics, "D", _diskScale.Fraction(_diskReadEma.Value), _diskScale.Fraction(_diskWriteEma.Value), DiskReadBrush, DiskWriteBrush, x, y);
-            x = DrawSeparator(e.Graphics, x, y);
-            x = DrawDualBars(e.Graphics, "N", _netScale.Fraction(_netDownEma.Value), _netScale.Fraction(_netUpEma.Value), NetDownBrush, NetUpBrush, x, y);
+            if (s.ShowRam)
+            {
+                x = Separate(g, x, y, lineHeight, ref anyDrawn);
+                x = DrawSection(g, "RAM", Formatting.FormatPercent(_current.RamUsage), _current.RamUsage / 100f, x, y, lineHeight);
+                x += ValueGap;
+                trailingGap = ValueGap;
+            }
+
+            bool gpu = s.ShowGpu && _hasGpu;
+            bool gpuTemp = s.ShowGpuTemp && _hasGpuTemp;
+            if (gpu || gpuTemp)
+            {
+                x = Separate(g, x, y, lineHeight, ref anyDrawn);
+                if (gpu)
+                {
+                    x = DrawSection(g, "GPU", Formatting.FormatPercent(_current.GpuUsage), _current.GpuUsage / 100f, x, y, lineHeight);
+                    x += ValueGap;
+                    trailingGap = ValueGap;
+                }
+                if (gpuTemp)
+                {
+                    x = DrawTemp(g, _current.GpuTemperature, x, y, lineHeight);
+                    x += TempGap;
+                    trailingGap = TempGap;
+                }
+            }
+
+            if (s.ShowDisk)
+            {
+                x = Separate(g, x, y, lineHeight, ref anyDrawn);
+                x = DrawDualBars(g, "D", _diskScale.Fraction(_diskReadEma.Value), _diskScale.Fraction(_diskWriteEma.Value),
+                    BarTheme.DiskRead, BarTheme.DiskWrite, x, y, lineHeight);
+                trailingGap = 0;
+            }
+
+            if (s.ShowNetwork)
+            {
+                x = Separate(g, x, y, lineHeight, ref anyDrawn);
+                x = DrawDualBars(g, "N", _netScale.Fraction(_netDownEma.Value), _netScale.Fraction(_netUpEma.Value),
+                    BarTheme.NetDown, BarTheme.NetUp, x, y, lineHeight);
+                trailingGap = 0;
+            }
 
             // Ширина контента известна только после обмера в текущем DPI (слоты фиксированы,
-            // но их пиксельная ширина зависит от монитора, а состав секций — от «защёлок»).
-            // Подгоняем ширину окна вне цикла отрисовки, удерживая правый край на месте.
-            int desiredWidth = x + 8;
+            // но их пиксельная ширина зависит от монитора, а состав секций — от настроек
+            // и «защёлок»). Подгоняем ширину окна вне цикла отрисовки, удерживая правый край.
+            int desiredWidth = x - trailingGap + EdgePad;
             if (desiredWidth != this.Width && _pendingBarWidth != desiredWidth)
             {
                 // Коалесцирование: в очереди один callback, применяется последний обмер
@@ -448,6 +765,19 @@ namespace SystemBarIndicator
             }
         }
 
+        // Разделитель ставится ПЕРЕД секцией, если что-то уже нарисовано: при выключенных
+        // секциях иначе остались бы висящие палки и лишние отступы по краям.
+        private int Separate(Graphics g, int x, int y, int lineHeight, ref bool anyDrawn)
+        {
+            if (anyDrawn)
+            {
+                g.DrawLine(_theme.Separator, x, y - 2, x, y + lineHeight);
+                x += SeparatorGap;
+            }
+            anyDrawn = true;
+            return x;
+        }
+
         // Меняет ширину окна, сохраняя положение правого края (бар прижат к правой
         // стороне панели задач, расти/сжиматься должен влево).
         private void ApplyPendingBarWidth()
@@ -456,32 +786,37 @@ namespace SystemBarIndicator
             _pendingBarWidth = 0;
             if (width <= 0 || width == this.Width || this.IsDisposed || !this.IsHandleCreated)
                 return;
+
             int right = this.Left + this.Width;
-            this.SetBounds(right - width, this.Top, width, this.Height);
+            var target = new Rectangle(right - width, this.Top, width, this.Height);
+            // Рост влево не должен утаскивать бар за левый край экрана.
+            target = WindowPlacement.ClampTo(target, Screen.FromRectangle(target).Bounds);
+            this.SetBounds(target.X, target.Y, target.Width, target.Height);
         }
 
         // Диск и сеть рисуем парой горизонтальных баров: ▼ чтение/загрузка, ▲ запись/отдача.
         // Значения сглажены (EMA), ширина баров фиксирована, у каждого ресурса свой
         // автомасштаб — поэтому ничего не «прыгает».
-        private int DrawDualBars(Graphics g, string label, float frac1, float frac2, Brush color1, Brush color2, int x, int y)
+        private int DrawDualBars(Graphics g, string label, float frac1, float frac2, Brush color1, Brush color2, int x, int y, int lineHeight)
         {
-            const int barW = 34;
-            const int barH = 8;
-            int barTop = y + (16 - barH) / 2;
+            float scale = (float)_settings.FontScale;
+            int barW = (int)Math.Round(34 * scale);
+            int barH = (int)Math.Round(8 * scale);
+            int barTop = y + (lineHeight - barH) / 2;
 
-            g.DrawString(label, SmallFont, DimBrush, x, y);
-            x += (int)g.MeasureString(label, SmallFont).Width + 4;
+            g.DrawString(label, _theme.SmallFont, _theme.Dim, x, y);
+            x += (int)g.MeasureString(label, _theme.SmallFont).Width + 4;
 
-            x = DrawBar(g, x, barTop, barW, barH, frac1, color1, down: true);
+            x = DrawBar(g, x, barTop, barW, barH, frac1, color1, down: true, scale);
             x += 6;
-            x = DrawBar(g, x, barTop, barW, barH, frac2, color2, down: false);
+            x = DrawBar(g, x, barTop, barW, barH, frac2, color2, down: false, scale);
 
             return x;
         }
 
-        private int DrawBar(Graphics g, int x, int top, int w, int h, float fraction, Brush color, bool down)
+        private int DrawBar(Graphics g, int x, int top, int w, int h, float fraction, Brush color, bool down, float scale)
         {
-            const float ts = 3f;
+            float ts = 3f * scale;
             float cx = x + ts;
             float cy = top + h / 2f;
             PointF[] tri = down
@@ -490,7 +825,7 @@ namespace SystemBarIndicator
             g.FillPolygon(color, tri);
             x += (int)(ts * 2) + 4;
 
-            FillRoundRect(g, NetTrackBrush, x, top, w, h, 3f);
+            FillRoundRect(g, _theme.Track, x, top, w, h, 3f);
             float fillW = w * fraction;
             if (fillW >= 1f)
                 FillRoundRect(g, color, x, top, fillW, h, 3f);
@@ -519,49 +854,45 @@ namespace SystemBarIndicator
             g.FillPath(brush, path);
         }
 
-        private int DrawSection(Graphics g, string label, string value, float loadPercent, int x, int y)
+        private int DrawSection(Graphics g, string label, string value, float loadPercent, int x, int y, int lineHeight)
         {
             Brush loadBrush = GetLoadBrush(loadPercent);
 
-            g.DrawString(label, SmallFont, DimBrush, x, y);
-            SizeF ls = g.MeasureString(label, SmallFont);
+            g.DrawString(label, _theme.SmallFont, _theme.Dim, x, y);
+            SizeF ls = g.MeasureString(label, _theme.SmallFont);
             x += (int)ls.Width + 2;
 
             // Слот по самому широкому значению: правый край и знак «%» неподвижны.
-            x = DrawValueSlot(g, value, "100%", loadBrush, x, y) + 10;
-            return x;
+            return DrawValueSlot(g, value, "100%", loadBrush, x, y, lineHeight);
         }
 
-        private int DrawTemp(Graphics g, string text, float temp, int x, int y)
+        private int DrawTemp(Graphics g, float celsius, int x, int y, int lineHeight)
         {
-            // Диапазон значения гарантирован Formatting.FormatTemperature (0..999).
-            return DrawValueSlot(g, text, "999C", GetTempBrush(temp), x, y) + 6;
+            // Цвет всегда считается по Цельсию: пороги LoadLevels заданы в нём,
+            // единицы отображения на цветовую индикацию влиять не должны.
+            bool fahrenheit = _settings.UseFahrenheit;
+            string text = Formatting.FormatTemperature(celsius, fahrenheit);
+            string template = Formatting.TemperatureSlotTemplate(fahrenheit);
+            return DrawValueSlot(g, text, template, GetTempBrush(celsius), x, y, lineHeight);
         }
 
         // Рисует значение в слоте фиксированной ширины (по шаблону) с прижатием вправо.
         // Ширина слота измеряется на текущем Graphics: при PerMonitorV2 она следует за DPI,
         // поэтому пиксельную ширину нельзя кэшировать между кадрами.
-        private static int DrawValueSlot(Graphics g, string value, string template, Brush brush, int x, int y)
+        private int DrawValueSlot(Graphics g, string value, string template, Brush brush, int x, int y, int lineHeight)
         {
-            SizeF slot = g.MeasureString(template, MainFont);
-            int slotW = (int)Math.Ceiling(slot.Width);
-            var rect = new RectangleF(x, y, slotW, (float)Math.Ceiling(slot.Height));
-            g.DrawString(value, MainFont, brush, rect, ValueRightAligned);
+            int slotW = (int)Math.Ceiling(g.MeasureString(template, _theme.MainFont).Width);
+            var rect = new RectangleF(x, y, slotW, lineHeight);
+            g.DrawString(value, _theme.MainFont, brush, rect, ValueRightAligned);
             return x + slotW;
-        }
-
-        private int DrawSeparator(Graphics g, int x, int y)
-        {
-            g.DrawLine(SeparatorPen, x, y - 2, x, y + 16);
-            return x + 8;
         }
 
         private static Brush BrushFor(LoadLevel level) => level switch
         {
-            LoadLevel.Critical => BrushRed,
-            LoadLevel.High => BrushOrange,
-            LoadLevel.Elevated => BrushYellow,
-            _ => BrushGreen
+            LoadLevel.Critical => BarTheme.Red,
+            LoadLevel.High => BarTheme.Orange,
+            LoadLevel.Elevated => BarTheme.Yellow,
+            _ => BarTheme.Green
         };
 
         private static Brush GetLoadBrush(float fraction) => BrushFor(LoadLevels.FromFraction(fraction));
@@ -570,34 +901,30 @@ namespace SystemBarIndicator
 
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == WM_LBUTTONDOWN)
+            if (m.Msg == WM_SYSCOMMAND && ((long)m.WParam & 0xFFF0) == SC_MOVE)
             {
-                _mouseDown = true;
-                _mouseDownLocation = this.PointToClient(Cursor.Position);
+                // Нажатие по бару система превращает в SC_MOVE. Обработчик по умолчанию
+                // возвращает управление только после отпускания кнопки, поэтому здесь же
+                // видно, чем жест оказался: бар не сдвинулся — это клик (открыть графики).
+                var before = this.Location;
                 base.WndProc(ref m);
-                return;
-            }
-
-            if (m.Msg == WM_LBUTTONUP)
-            {
-                if (_mouseDown)
-                {
-                    var currentPos = this.PointToClient(Cursor.Position);
-                    int dx = currentPos.X - _mouseDownLocation.X;
-                    int dy = currentPos.Y - _mouseDownLocation.Y;
-                    if (Math.Abs(dx) < 5 && Math.Abs(dy) < 5)
-                    {
-                        OpenGraphOverlay();
-                    }
-                }
-                _mouseDown = false;
-                base.WndProc(ref m);
+                if (this.Location == before)
+                    OpenGraphOverlay();
                 return;
             }
 
             if (m.Msg == WM_NCHITTEST)
             {
                 m.Result = (IntPtr)HTCAPTION;
+                return;
+            }
+
+            if (m.Msg == WM_DISPLAYCHANGE)
+            {
+                base.WndProc(ref m);
+                // Отложенно: к моменту обработки система уже обновит список мониторов.
+                if (this.IsHandleCreated && !this.IsDisposed)
+                    BeginInvoke(new Action(ReconcilePositionWithScreens));
                 return;
             }
 
@@ -624,6 +951,11 @@ namespace SystemBarIndicator
         {
             _timer.Stop();
             _topmostTimer.Stop();
+            _saveTimer.Stop();
+            FlushSettings();
+
+            if (_settingsForm != null && !_settingsForm.IsDisposed)
+                _settingsForm.Close();
 
             if (_graphOverlay != null && !_graphOverlay.IsDisposed)
                 _graphOverlay.Close();
@@ -638,7 +970,16 @@ namespace SystemBarIndicator
 
             _timer.Dispose();
             _topmostTimer.Dispose();
+            _saveTimer.Dispose();
             base.OnFormClosing(e);
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            // Шрифты и кисти освобождаем только когда окно уже уничтожено: между
+            // FormClosing и FormClosed ещё может прийти WM_PAINT.
+            _theme.Dispose();
+            base.OnFormClosed(e);
         }
     }
 }

@@ -3,28 +3,28 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
+using SystemBarIndicator.Configuration;
 using SystemBarIndicator.Models;
 using SystemBarIndicator.Util;
 
 namespace SystemBarIndicator
 {
-    public class GraphOverlay : Form
+    internal sealed class GraphOverlay : Form
     {
         private const int ChartHeight = 72;
         private const int OuterPadding = 8;
         private const int Gap = 4;
-
-        // Общие ресурсы рисования — одинаковы для всех графиков, живут на всё время работы.
-        private static readonly Font TitleFont = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-        private static readonly Brush TitleBrush = new SolidBrush(Color.FromArgb(150, 150, 170));
-        private static readonly Font ValueFont = new Font("Segoe UI", 13f, FontStyle.Bold);
-        private static readonly Brush CardBrush = new SolidBrush(Color.FromArgb(28, 28, 38));
-        private static readonly Pen GridPen = new Pen(Color.FromArgb(38, 38, 52), 1);
+        // Ширину оверлей берёт у бара, а тот может стать совсем узким, если выключить
+        // большинство секций, — графики в такой полоске нечитаемы.
+        private const int MinWidth = 320;
 
         private readonly DataHistory _history;
         private readonly Func<SensorData> _getCurrentData;
         private readonly MainForm _parentForm;
         private readonly Timer _updateTimer;
+
+        private BarTheme _theme;
+        private AppSettings _settings;
 
         private class ChartConfig
         {
@@ -34,8 +34,10 @@ namespace SystemBarIndicator
             public required Func<SensorData, string> FormatValue;
             public float MaxDefault;
             public bool ShowOnlyIfPositive;
+            /// <summary>Показана ли секция в настройках — график следует за составом бара.</summary>
+            public required Func<AppSettings, bool> IsEnabled;
 
-            // Цветные ресурсы графика — создаются один раз, освобождаются в OnFormClosing.
+            // Цветные ресурсы графика — создаются один раз, освобождаются в OnFormClosed.
             public SolidBrush LineBrush = null!;
             public Pen LinePen = null!;
             public Pen GlowPen = null!;
@@ -43,22 +45,25 @@ namespace SystemBarIndicator
 
         private readonly ChartConfig[] _charts;
 
-        public GraphOverlay(DataHistory history, Func<SensorData> getCurrentData, MainForm parentForm)
+        public GraphOverlay(DataHistory history, Func<SensorData> getCurrentData, MainForm parentForm,
+            BarTheme theme, AppSettings settings)
         {
             _history = history;
             _getCurrentData = getCurrentData;
             _parentForm = parentForm;
+            _theme = theme;
+            _settings = settings;
 
             _charts = new ChartConfig[]
             {
-                new ChartConfig { Title = "CPU", LineColor = Color.FromArgb(99, 179, 237), GetValue = p => p.CpuUsage, FormatValue = d => string.Format("{0:F0}%", d.CpuUsage), MaxDefault = 100, ShowOnlyIfPositive = false },
-                new ChartConfig { Title = "CPU Temp", LineColor = Color.FromArgb(244, 143, 177), GetValue = p => p.CpuTemperature, FormatValue = d => string.Format("{0:F0}C", d.CpuTemperature), MaxDefault = 100, ShowOnlyIfPositive = true },
-                new ChartConfig { Title = "RAM", LineColor = Color.FromArgb(129, 140, 248), GetValue = p => p.RamUsage, FormatValue = d => string.Format("{0:F0}%", d.RamUsage), MaxDefault = 100, ShowOnlyIfPositive = false },
-                new ChartConfig { Title = "GPU", LineColor = Color.FromArgb(72, 187, 120), GetValue = p => p.GpuUsage, FormatValue = d => string.Format("{0:F0}%", d.GpuUsage), MaxDefault = 100, ShowOnlyIfPositive = true },
-                new ChartConfig { Title = "GPU Temp", LineColor = Color.FromArgb(255, 167, 38), GetValue = p => p.GpuTemperature, FormatValue = d => string.Format("{0:F0}C", d.GpuTemperature), MaxDefault = 100, ShowOnlyIfPositive = true },
-                new ChartConfig { Title = "Disk R/W", LineColor = Color.FromArgb(171, 71, 188), GetValue = p => p.DiskRead + p.DiskWrite, FormatValue = d => string.Format("{0:F0} / {1:F0} MB", d.DiskRead, d.DiskWrite), MaxDefault = 500, ShowOnlyIfPositive = false },
-                new ChartConfig { Title = "Net DL", LineColor = Color.FromArgb(237, 137, 54), GetValue = p => p.NetDown, FormatValue = d => FormatSpeed(d.NetDown), MaxDefault = 10000, ShowOnlyIfPositive = false },
-                new ChartConfig { Title = "Net UL", LineColor = Color.FromArgb(38, 198, 218), GetValue = p => p.NetUp, FormatValue = d => FormatSpeed(d.NetUp), MaxDefault = 10000, ShowOnlyIfPositive = false }
+                new ChartConfig { Title = "CPU", LineColor = Color.FromArgb(99, 179, 237), GetValue = p => p.CpuUsage, FormatValue = d => string.Format("{0:F0}%", d.CpuUsage), MaxDefault = 100, ShowOnlyIfPositive = false, IsEnabled = s => s.ShowCpu },
+                new ChartConfig { Title = "CPU Temp", LineColor = Color.FromArgb(244, 143, 177), GetValue = p => p.CpuTemperature, FormatValue = d => FormatTemp(d.CpuTemperature), MaxDefault = 100, ShowOnlyIfPositive = true, IsEnabled = s => s.ShowCpuTemp },
+                new ChartConfig { Title = "RAM", LineColor = Color.FromArgb(129, 140, 248), GetValue = p => p.RamUsage, FormatValue = d => string.Format("{0:F0}%", d.RamUsage), MaxDefault = 100, ShowOnlyIfPositive = false, IsEnabled = s => s.ShowRam },
+                new ChartConfig { Title = "GPU", LineColor = Color.FromArgb(72, 187, 120), GetValue = p => p.GpuUsage, FormatValue = d => string.Format("{0:F0}%", d.GpuUsage), MaxDefault = 100, ShowOnlyIfPositive = true, IsEnabled = s => s.ShowGpu },
+                new ChartConfig { Title = "GPU Temp", LineColor = Color.FromArgb(255, 167, 38), GetValue = p => p.GpuTemperature, FormatValue = d => FormatTemp(d.GpuTemperature), MaxDefault = 100, ShowOnlyIfPositive = true, IsEnabled = s => s.ShowGpuTemp },
+                new ChartConfig { Title = "Disk R/W", LineColor = Color.FromArgb(171, 71, 188), GetValue = p => p.DiskRead + p.DiskWrite, FormatValue = d => string.Format("{0:F0} / {1:F0} MB", d.DiskRead, d.DiskWrite), MaxDefault = 500, ShowOnlyIfPositive = false, IsEnabled = s => s.ShowDisk },
+                new ChartConfig { Title = "Net DL", LineColor = Color.FromArgb(237, 137, 54), GetValue = p => p.NetDown, FormatValue = d => FormatSpeed(d.NetDown), MaxDefault = 10000, ShowOnlyIfPositive = false, IsEnabled = s => s.ShowNetwork },
+                new ChartConfig { Title = "Net UL", LineColor = Color.FromArgb(38, 198, 218), GetValue = p => p.NetUp, FormatValue = d => FormatSpeed(d.NetUp), MaxDefault = 10000, ShowOnlyIfPositive = false, IsEnabled = s => s.ShowNetwork }
             };
 
             foreach (var c in _charts)
@@ -71,8 +76,8 @@ namespace SystemBarIndicator
             this.FormBorderStyle = FormBorderStyle.None;
             this.ShowInTaskbar = false;
             this.TopMost = true;
-            this.BackColor = Color.FromArgb(20, 20, 28);
-            this.Opacity = 0.95;
+            this.BackColor = _theme.OverlayBackground;
+            this.Opacity = OverlayOpacity(_settings);
             this.StartPosition = FormStartPosition.Manual;
             this.DoubleBuffered = true;
             this.SetStyle(ControlStyles.ResizeRedraw | ControlStyles.OptimizedDoubleBuffer, true);
@@ -87,19 +92,39 @@ namespace SystemBarIndicator
             _updateTimer.Start();
         }
 
+        /// <summary>Оверлей чуть плотнее бара, но следует за его прозрачностью.</summary>
+        private static double OverlayOpacity(AppSettings settings) =>
+            Math.Min(1.0, settings.Opacity + 0.03);
+
+        /// <summary>Подхватывает смену темы и настроек без пересоздания окна.</summary>
+        public void ApplyTheme(BarTheme theme, AppSettings settings)
+        {
+            _theme = theme;
+            _settings = settings;
+            this.BackColor = _theme.OverlayBackground;
+            double opacity = OverlayOpacity(settings);
+            if (this.Opacity != opacity)
+                this.Opacity = opacity;
+            PositionAboveParent();
+            this.Invalidate();
+        }
+
         private void UpdateSize()
         {
             int visibleCharts = GetVisibleChartCount(_history.GetPoints());
             int totalHeight = OuterPadding * 2 + visibleCharts * ChartHeight + Math.Max(visibleCharts - 1, 0) * Gap;
-            this.Size = new Size(_parentForm.Width, Math.Min(totalHeight, 650));
+            this.Size = new Size(Math.Max(_parentForm.Width, MinWidth), Math.Min(totalHeight, 650));
         }
+
+        private bool IsChartVisible(ChartConfig chart, List<DataPoint> data) =>
+            chart.IsEnabled(_settings) && (!chart.ShowOnlyIfPositive || HasRecentPositive(chart, data));
 
         private int GetVisibleChartCount(List<DataPoint> data)
         {
             int count = 0;
             foreach (var c in _charts)
             {
-                if (!c.ShowOnlyIfPositive || HasRecentPositive(c, data))
+                if (IsChartVisible(c, data))
                     count++;
             }
             return count;
@@ -120,16 +145,24 @@ namespace SystemBarIndicator
         {
             UpdateSize();
 
+            // Экран берём по фактическому положению бара: на мониторе выше или левее
+            // основного координаты отрицательны, и клэмп по нулю был бы неверен.
+            var screen = Screen.FromRectangle(_parentForm.Bounds).WorkingArea;
+
             int x = _parentForm.Left;
+            if (x + this.Width > screen.Right) x = screen.Right - this.Width;
+            if (x < screen.Left) x = screen.Left;
+
             int y;
             if (_parentForm.BarEdge == MainForm.TaskbarEdge.Top)
             {
                 y = _parentForm.Bottom + Gap;
+                if (y + this.Height > screen.Bottom) y = screen.Bottom - this.Height;
             }
             else
             {
                 y = _parentForm.Top - this.Height - Gap;
-                if (y < 0) y = 0;
+                if (y < screen.Top) y = screen.Top;
             }
 
             var loc = new Point(x, y);
@@ -148,7 +181,7 @@ namespace SystemBarIndicator
 
             foreach (var chart in _charts)
             {
-                if (chart.ShowOnlyIfPositive && !HasRecentPositive(chart, data))
+                if (!IsChartVisible(chart, data))
                     continue;
 
                 DrawChart(e.Graphics, chart, data, OuterPadding, y, this.Width - OuterPadding * 2, ChartHeight);
@@ -160,14 +193,14 @@ namespace SystemBarIndicator
         {
             using (var path = CreateRoundRect(x, y, w, h, 8))
             {
-                g.FillPath(CardBrush, path);
+                g.FillPath(_theme.CardBrush, path);
             }
 
             string displayVal = chart.FormatValue(_getCurrentData());
-            g.DrawString(chart.Title, TitleFont, TitleBrush, x + 10, y + 6);
+            g.DrawString(chart.Title, _theme.TitleFont, _theme.TitleBrush, x + 10, y + 6);
 
-            var size = g.MeasureString(displayVal, ValueFont);
-            g.DrawString(displayVal, ValueFont, chart.LineBrush, x + w - size.Width - 10, y + 4);
+            var size = g.MeasureString(displayVal, _theme.ValueFont);
+            g.DrawString(displayVal, _theme.ValueFont, chart.LineBrush, x + w - size.Width - 10, y + 4);
 
             int chartX = x + 10;
             int chartY = y + 24;
@@ -187,7 +220,7 @@ namespace SystemBarIndicator
             for (int i = 1; i <= 3; i++)
             {
                 int gy = chartY + (int)(chartH * i / 4f);
-                g.DrawLine(GridPen, chartX, gy, chartX + chartW, gy);
+                g.DrawLine(_theme.GridPen, chartX, gy, chartX + chartW, gy);
             }
 
             var pts = new List<PointF>(data.Count);
@@ -270,9 +303,18 @@ namespace SystemBarIndicator
 
         private static string FormatSpeed(float kbps) => Formatting.FormatSpeed(kbps);
 
+        private string FormatTemp(float celsius) => Formatting.FormatTemperature(celsius, _settings.UseFahrenheit);
+
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             _updateTimer.Stop();
+            base.OnFormClosing(e);
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            // Освобождаем ресурсы рисования только после уничтожения окна: между
+            // FormClosing и FormClosed ещё может прийти WM_PAINT.
             _updateTimer.Dispose();
 
             foreach (var c in _charts)
@@ -282,7 +324,7 @@ namespace SystemBarIndicator
                 c.GlowPen.Dispose();
             }
 
-            base.OnFormClosing(e);
+            base.OnFormClosed(e);
         }
     }
 }
