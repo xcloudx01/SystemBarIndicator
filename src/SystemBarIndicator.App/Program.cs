@@ -52,6 +52,9 @@ namespace SystemBarIndicator
         [DllImport("user32.dll")]
         private static extern int GetSystemMetrics(int nIndex);
 
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
         [DllImport("shell32.dll", CallingConvention = CallingConvention.StdCall)]
         private static extern IntPtr SHAppBarMessage(uint dwMessage, ref APPBARDATA pData);
 
@@ -106,6 +109,12 @@ namespace SystemBarIndicator
         // click without movement. The only place the whole gesture is visible is SC_MOVE.
         private const int WM_SYSCOMMAND = 0x0112;
         private const int SC_MOVE = 0xF010;
+        // The other side of that coin: the system reads the remaining title-bar gestures the same
+        // way — a double-click maximizes the window and a right-click opens the system menu (which
+        // offers "Maximize" as well). Both are intercepted in WndProc.
+        private const int WM_NCLBUTTONDBLCLK = 0x00A3;
+        private const int WM_NCRBUTTONUP = 0x00A5;
+        private const int SC_MAXIMIZE = 0xF030;
 
         // --- Bar geometry ---
         private const int EdgePad = 8;      // padding from the window edges
@@ -140,6 +149,7 @@ namespace SystemBarIndicator
         private readonly Timer _topmostTimer;
         private readonly Timer _saveTimer;
         private readonly NotifyIcon _trayIcon;
+        private readonly ContextMenuStrip _menu; // shared by the tray icon and the bar itself
         private readonly DataHistory _history;
         private GraphOverlay? _graphOverlay;
         private SettingsForm? _settingsForm;
@@ -197,9 +207,6 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
             _appIcon = LoadAppIcon();
             this.Icon = _appIcon;
             this.FormBorderStyle = FormBorderStyle.None;
-            // The whole window returns HTCAPTION, so a double-click would be treated as a
-            // double-click on the title bar and maximize it — remove the possibility.
-            this.MaximizeBox = false;
             this.ShowInTaskbar = true;
             this.TopMost = true;
             this.BackColor = _theme.Background;
@@ -213,22 +220,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
                     _graphOverlay.PositionAboveParent();
             };
 
-            _timer = new Timer { Interval = _settings.UpdateIntervalMs };
-            _timer.Tick += TimerTick;
-            ApplySmoothingRates(_settings.UpdateIntervalMs);
-            _timer.Start();
-
-            // Staying on top is handled by WM_WINDOWPOSCHANGING; this timer is only a rare
-            // safety net (it used to run at an aggressive 200 ms interval).
-            _topmostTimer = new Timer { Interval = 1000 };
-            _topmostTimer.Tick += (s, e) => ForceTopMost();
-            _topmostTimer.Start();
-
-            // Settings writes are deferred: dragging the bar and moving a slider must not
-            // cause a storm of disk writes.
-            _saveTimer = new Timer { Interval = 1500 };
-            _saveTimer.Tick += (s, e) => { _saveTimer.Stop(); FlushSettings(); };
-
+            // The tray icon and its menu come first: the timers below refer to the menu.
             _trayIcon = new NotifyIcon
             {
                 Visible = true,
@@ -237,13 +229,31 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
             };
             _trayIcon.MouseClick += TrayIconClick;
 
-            var menu = new ContextMenuStrip();
-            menu.Items.Add("Graphs", null, (s, e) => OpenGraphOverlay());
-            menu.Items.Add("Settings...", null, (s, e) => OpenSettings());
-            menu.Items.Add("Reset Position", null, (s, e) => ResetPosition());
-            menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("Exit", null, (s, e) => { _trayIcon.Visible = false; Application.Exit(); });
-            _trayIcon.ContextMenuStrip = menu;
+            _menu = new ContextMenuStrip();
+            _menu.Items.Add("Graphs", null, (s, e) => OpenGraphOverlay());
+            _menu.Items.Add("Settings...", null, (s, e) => OpenSettings());
+            _menu.Items.Add("Reset Position", null, (s, e) => ResetPosition());
+            _menu.Items.Add(new ToolStripSeparator());
+            _menu.Items.Add("Exit", null, (s, e) => { _trayIcon.Visible = false; Application.Exit(); });
+            _trayIcon.ContextMenuStrip = _menu;
+
+            _timer = new Timer { Interval = _settings.UpdateIntervalMs };
+            _timer.Tick += TimerTick;
+            ApplySmoothingRates(_settings.UpdateIntervalMs);
+            _timer.Start();
+
+            // Staying on top is handled by WM_WINDOWPOSCHANGING; this timer is only a rare
+            // safety net (it used to run at an aggressive 200 ms interval).
+            _topmostTimer = new Timer { Interval = 1000 };
+            // Not while the menu is open: re-asserting HWND_TOPMOST would lift the bar above the
+            // drop-down and cover it.
+            _topmostTimer.Tick += (s, e) => { if (!_menu.Visible) ForceTopMost(); };
+            _topmostTimer.Start();
+
+            // Settings writes are deferred: dragging the bar and moving a slider must not
+            // cause a storm of disk writes.
+            _saveTimer = new Timer { Interval = 1500 };
+            _saveTimer.Tick += (s, e) => { _saveTimer.Stop(); FlushSettings(); };
         }
 
         private void InitSensors()
@@ -485,6 +495,14 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
                 _graphOverlay.Close();
                 _graphOverlay = null;
             }
+        }
+
+        private void ShowBarMenu()
+        {
+            // A drop-down whose owner is not the foreground window does not close on a click
+            // outside it, so the bar is pulled forward first.
+            SetForegroundWindow(this.Handle);
+            _menu.Show(Cursor.Position);
         }
 
         private void TrayIconClick(object? sender, MouseEventArgs e)
@@ -906,15 +924,44 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
 
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == WM_SYSCOMMAND && ((long)m.WParam & 0xFFF0) == SC_MOVE)
+            if (m.Msg == WM_SYSCOMMAND)
             {
-                // The system turns a press on the bar into SC_MOVE. The default handler only
-                // returns once the button is released, so this is where the gesture resolves:
-                // if the bar did not move, it was a click (open the graphs).
-                var before = this.Location;
-                base.WndProc(ref m);
-                if (this.Location == before)
-                    OpenGraphOverlay();
+                switch ((long)m.WParam & 0xFFF0)
+                {
+                    case SC_MOVE:
+                    {
+                        // The system turns a press on the bar into SC_MOVE. The default handler only
+                        // returns once the button is released, so this is where the gesture resolves:
+                        // if the bar did not move, it was a click (open the graphs).
+                        var before = this.Location;
+                        base.WndProc(ref m);
+                        if (this.Location == before)
+                            OpenGraphOverlay();
+                        return;
+                    }
+
+                    case SC_MAXIMIZE:
+                        // The bar is sized to fit its content; full screen is never wanted.
+                        // Form.MaximizeBox cannot express that: WinForms fills in the title-bar
+                        // button styles only when FormBorderStyle != None, so the flag never reaches
+                        // the window and the command has to be dropped here.
+                        return;
+                }
+            }
+
+            if (m.Msg == WM_NCLBUTTONDBLCLK)
+            {
+                // A double-click on the "title bar" would maximize the window. There is nothing to
+                // bind to the gesture either: the first click has already toggled the graphs, so
+                // the second one is simply dropped.
+                return;
+            }
+
+            if (m.Msg == WM_NCRBUTTONUP)
+            {
+                // The system menu of a title bar is useless for the bar (and offers "Maximize" as
+                // one more route to the same trap) — show the application menu instead.
+                ShowBarMenu();
                 return;
             }
 

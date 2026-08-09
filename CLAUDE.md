@@ -75,7 +75,14 @@ dotnet run --project src/SystemBarIndicator.App   # run the app
   arrive, `WM_NCLBUTTONUP` is swallowed, and `WM_ENTERSIZEMOVE` does not arrive at all for a
   click **without** movement. The gesture is therefore decoded inside `SC_MOVE` itself:
   `base.WndProc` returns once the button is released, and if `Location` did not change it
-  was a click (open the graphs).
+  was a click (open the graphs). The other two title-bar gestures are intercepted for the
+  same reason: `WM_NCLBUTTONDBLCLK` is dropped (a double-click would maximize the bar to
+  full screen; there is nothing to bind to it either, since the first click has already
+  toggled the graphs), and `WM_NCRBUTTONUP` opens the app's own menu instead of the window
+  system menu — which offers "Maximize" as a second route to the same trap. `SC_MAXIMIZE`
+  is refused in `WM_SYSCOMMAND` as the backstop: `Form.MaximizeBox` is **not** an option,
+  because WinForms fills in the title-bar button styles only when
+  `FormBorderStyle != None`, so the flag never reaches the window.
 - **Drawing.** GDI+ resources live in `BarTheme` (fonts and colours that depend on settings)
   and are recreated when the theme or scale changes; the fixed load-level colours are
   `static`, and per-graph coloured resources belong to their graph. History is taken as a

@@ -81,7 +81,7 @@ everything else works.
 
 ## Usage
 
-Right-click the tray icon:
+Right-click the tray icon — or the bar itself — for the menu:
 
 | Item | Action |
 |------|--------|
