@@ -42,7 +42,9 @@ work on everything else. To test the temperature path, install with
 3. Make sure `dotnet build -c Release` and `dotnet test -c Release` both pass — CI runs
    exactly these on `windows-latest`.
 4. Add tests for anything you put in `Core`.
-5. Describe what you changed and how you verified it. For UI changes, a screenshot helps.
+5. Add an entry under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) if the change is
+   visible to users. Internal refactors and test-only changes do not need one.
+6. Describe what you changed and how you verified it. For UI changes, a screenshot helps.
 
 ## Commit messages
 

@@ -45,8 +45,9 @@ the screen.
 ## Requirements
 
 - Windows 10 (build 19041+) or Windows 11
-- [.NET 10 SDK](https://dotnet.microsoft.com/download) — to build; the published app needs
-  only the .NET 10 desktop runtime
+- [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download) — to run a prebuilt
+  build; the [.NET 10 SDK](https://dotnet.microsoft.com/download) only if you build it
+  yourself
 - Administrator rights — required to read hardware temperatures (the sensor driver is
   loaded into the kernel)
 - [PawnIO](https://pawnio.eu) — **optional**, needed only for CPU temperature. See
@@ -54,7 +55,17 @@ the screen.
 
 ## Install
 
-### Option 1 — install script (recommended)
+### Option 1 — download a build
+
+Grab `SystemBarIndicator-win-x64.zip` from the
+[latest release](https://github.com/coldneuro/SystemBarIndicator/releases/latest), unpack it
+anywhere and run `SystemBarIndicator.exe`. No SDK needed, only the .NET 10 desktop runtime.
+The build is unsigned, so SmartScreen will ask once before it starts.
+
+Launched this way the app is **not** elevated, so temperatures stay unavailable — for those,
+use option 2.
+
+### Option 2 — install script (recommended)
 
 Publishes the app, then sets it up so a desktop shortcut launches it **elevated without a
 UAC prompt every time**:
@@ -68,7 +79,7 @@ pwsh -File deploy/Install.ps1            # add -AutoStart to also start it at lo
 You get exactly one UAC prompt during installation — for registering the scheduled task.
 See [deploy/README.md](deploy/README.md) for how and why this works, and for uninstalling.
 
-### Option 2 — run from source
+### Option 3 — run from source
 
 ```powershell
 git clone https://github.com/coldneuro/SystemBarIndicator.git

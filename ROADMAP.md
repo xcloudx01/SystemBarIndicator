@@ -22,12 +22,15 @@ they are the things most likely to be picked up, in roughly that order.
 - Elevation without a per-launch UAC prompt, via a scheduled task (`deploy/Install.ps1`)
 - LibreHardwareMonitorLib 0.9.6 with the signed PawnIO driver instead of WinRing0
 - Unit tests for all of `Core`; CI builds and tests on `windows-latest` with warnings as errors
+- Prebuilt `win-x64` binaries on GitHub Releases, so running the app needs no .NET SDK
 
 ## Ideas
 
 **Distribution**
-- Prebuilt binaries on GitHub Releases, so users do not need the .NET SDK
 - Self-contained publish as an alternative to the framework-dependent one
+- An install script that works against a downloaded build, so the elevated no-UAC setup does
+  not require cloning the repository
+- Publishing the release build from CI instead of a local machine
 - Code signing, to avoid the SmartScreen warning
 
 **Monitoring**
