@@ -46,6 +46,12 @@ work on everything else. To test the temperature path, install with
    visible to users. Internal refactors and test-only changes do not need one.
 6. Describe what you changed and how you verified it. For UI changes, a screenshot helps.
 
+## Releasing
+
+Maintainer-only, and manual: bump `<Version>`, close the `Unreleased` section of the
+changelog, tag, then publish a `win-x64` zip with the release. The exact steps are in
+[deploy/README.md](deploy/README.md#releasing).
+
 ## Commit messages
 
 Conventional-commit style prefixes are used: `feat:`, `fix:`, `chore:`, `docs:`, `ci:`,

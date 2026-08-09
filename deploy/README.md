@@ -60,3 +60,50 @@ pwsh -File deploy/Uninstall.ps1 -RemoveFiles  # also delete the install director
 non-ASCII characters, saved as UTF-8 without a BOM and re-read by `powershell.exe`
 (Windows PowerShell 5.1) under the ANSI code page, gets corrupted — that once caused the
 task to be registered under a mojibake folder name. Keep executable `.ps1` text ASCII.
+
+## Releasing
+
+Maintainer steps for cutting a version. All of it is manual: CI builds and tests, it does
+not publish.
+
+1. Bump `<Version>` in `Directory.Build.props`. It stamps the assembly, so the exe reports
+   the same number as the tag.
+2. In [CHANGELOG.md](../CHANGELOG.md), turn `## [Unreleased]` into a
+   `## [X.Y.Z] - YYYY-MM-DD` section, leave a fresh empty `## [Unreleased]` above it, and
+   update the two link definitions at the bottom of the file.
+3. `dotnet build -c Release` and `dotnet test -c Release` must both pass — the build fails
+   on any warning.
+4. Commit and push, then tag that commit:
+
+   ```powershell
+   git tag -a vX.Y.Z -m "SystemBar Indicator X.Y.Z"
+   git push origin vX.Y.Z
+   ```
+
+5. Publish the build **outside OneDrive** and package it. `LICENSE` goes in because MIT
+   requires the notice to travel with binaries; `README.txt` carries the quick start, the
+   SmartScreen warning and the third-party licences (LibreHardwareMonitorLib is MPL-2.0):
+
+   ```powershell
+   $stage = "$env:TEMP\SystemBarIndicator-X.Y.Z"
+   dotnet publish ..\src\SystemBarIndicator.App -c Release -r win-x64 --self-contained false `
+       -p:PublishSingleFile=false -p:PublishReadyToRun=false -o $stage
+   Copy-Item ..\LICENSE -Destination $stage
+   # write $stage\README.txt as well
+   Compress-Archive -Path $stage -DestinationPath "$env:TEMP\SystemBarIndicator-win-x64.zip"
+   ```
+
+   Pack the **folder**, not its contents: the version then survives as the directory name
+   inside the archive, while the asset name itself stays constant — the main README links to
+   `/releases/latest`, so a version in the file name would break it on the next release.
+
+6. Create the release with notes and the asset:
+
+   ```powershell
+   gh release create vX.Y.Z --title "SystemBar Indicator X.Y.Z" `
+       --notes-file notes.md --verify-tag "$env:TEMP\SystemBarIndicator-win-x64.zip"
+   ```
+
+7. Unpack the published archive into an empty folder and start the exe once. A run from
+   `bin` proves nothing about the packaged layout — LHM 0.9.6 is a RID-split package, and a
+   file missing from the flat publish only shows up here.

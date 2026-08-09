@@ -127,6 +127,9 @@ dotnet run --project src/SystemBarIndicator.App   # run the app
 - Application log: `%LOCALAPPDATA%\SystemBarIndicator\app.log`.
 - `ROADMAP.md` separates what is implemented from what is merely an idea — keep that
   distinction accurate when it changes.
+- User-visible changes get an entry under `## [Unreleased]` in `CHANGELOG.md`; internal
+  refactors and test-only changes do not. Releasing (version bump, tag, `win-x64` zip) is
+  manual and documented in `deploy/README.md#releasing`.
 - **Desktop deployment.** `LibreHardwareMonitorLib` 0.9.6 is a RID-split package (the real
   assemblies live in `runtimes/<rid>/lib/<tfm>/`). To get a clean flat layout of a single
   version, publish with a RID into a separate folder (outside OneDrive):
