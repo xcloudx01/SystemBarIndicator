@@ -17,6 +17,14 @@ sideways as values change, and the colour follows the load level. Disk and netwo
 as a pair of bars rather than numbers — ▼ is read/download, ▲ is write/upload — smoothed and
 auto-scaled to recent peaks.
 
+Click the bar and it unfolds into the history overlay, covering roughly the last two minutes:
+
+<img src="docs/graphs.png" alt="The history overlay above the bar: eight charts for CPU, CPU temperature, RAM, GPU, GPU temperature, disk read/write and network download/upload" width="420">
+
+The overlay tracks the bar — it follows it around the screen, shows only the sections you
+have enabled, and opens downwards instead of upwards if you drag the bar to the top half of
+the screen.
+
 ## Features
 
 - **CPU** — total load and temperature
