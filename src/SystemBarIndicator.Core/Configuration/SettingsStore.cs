@@ -6,9 +6,9 @@ using System.Text.Json.Serialization;
 namespace SystemBarIndicator.Configuration
 {
     /// <summary>
-    /// Контекст сериализации настроек. Source-generated вариант выбран сознательно:
-    /// он не зависит от рефлексии, поэтому останется корректным, если проект когда-нибудь
-    /// начнут публиковать с trimming/AOT (сейчас предупреждений не даёт ни тот, ни другой).
+    /// Serialization context for the settings. The source-generated variant is deliberate:
+    /// it does not rely on reflection, so it stays correct if the project is ever published
+    /// with trimming/AOT (neither of which produces warnings today).
     /// </summary>
     [JsonSourceGenerationOptions(
         WriteIndented = true,
@@ -20,20 +20,20 @@ namespace SystemBarIndicator.Configuration
     }
 
     /// <summary>
-    /// Чтение и запись файла настроек. Загрузка никогда не бросает: любой сбой
-    /// (нет файла, битый JSON, нет прав) даёт настройки по умолчанию, а причина
-    /// возвращается через out-параметр — логирует её вызывающий код.
+    /// Reads and writes the settings file. Loading never throws: any failure (missing file,
+    /// corrupt JSON, no permissions) yields the default settings, and the reason is returned
+    /// through an out parameter for the caller to log.
     /// </summary>
     public static class SettingsStore
     {
         public const string FileName = "settings.json";
 
-        /// <summary>%LOCALAPPDATA%\SystemBarIndicator\settings.json — рядом с app.log.</summary>
+        /// <summary>%LOCALAPPDATA%\SystemBarIndicator\settings.json — next to app.log.</summary>
         public static string DefaultPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SystemBarIndicator", FileName);
 
-        /// <summary>Загружает нормализованные настройки; при любой ошибке — значения по умолчанию.</summary>
+        /// <summary>Loads normalized settings; on any error, the defaults.</summary>
         public static AppSettings Load(string path, out Exception? error)
         {
             error = null;
@@ -46,7 +46,8 @@ namespace SystemBarIndicator.Configuration
                 if (string.IsNullOrWhiteSpace(json))
                     return new AppSettings();
 
-                // Содержимое "null" — валидный JSON, дающий null: это не ошибка, но и не настройки.
+                // A file containing "null" is valid JSON that deserializes to null: not an
+                // error, but not settings either.
                 var loaded = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettings);
                 return (loaded ?? new AppSettings()).Normalized();
             }
@@ -58,9 +59,9 @@ namespace SystemBarIndicator.Configuration
         }
 
         /// <summary>
-        /// Атомарно сохраняет настройки: запись во временный файл рядом и подмена.
-        /// Оборванная запись не оставит обрезанный JSON вместо рабочего файла.
-        /// Сохраняются всегда нормализованные значения — NaN/бесконечность в JSON недопустимы.
+        /// Saves the settings atomically: write to a temp file alongside, then swap it in.
+        /// An interrupted write cannot leave truncated JSON in place of a working file.
+        /// Normalized values are always persisted — NaN/infinity are not valid JSON.
         /// </summary>
         public static void Save(string path, AppSettings settings)
         {

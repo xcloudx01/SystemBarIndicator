@@ -25,8 +25,8 @@ namespace SystemBarIndicator.Sensors
         }
 
         /// <summary>
-        /// Обновляет показания всех устройств один раз. Должен вызываться раз за тик
-        /// перед чтением геттеров — LibreHardwareMonitor не обновляет значения сам.
+        /// Refreshes every device's readings once. Must be called once per tick before
+        /// reading the getters — LibreHardwareMonitor does not refresh values on its own.
         /// </summary>
         public void Update()
         {

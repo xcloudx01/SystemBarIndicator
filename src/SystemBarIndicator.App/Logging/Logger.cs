@@ -4,8 +4,8 @@ using System.IO;
 namespace SystemBarIndicator
 {
     /// <summary>
-    /// Минимальный потокобезопасный логгер. Пишет в Debug-вывод и в файл
-    /// %LOCALAPPDATA%\SystemBarIndicator\app.log. Сам никогда не бросает исключений.
+    /// A minimal thread-safe logger. Writes to the debug output and to
+    /// %LOCALAPPDATA%\SystemBarIndicator\app.log. It never throws.
     /// </summary>
     internal static class Logger
     {
@@ -38,7 +38,7 @@ namespace SystemBarIndicator
             }
             catch
             {
-                // логирование не должно нарушать работу приложения
+                // logging must never disrupt the application
             }
         }
     }

@@ -4,14 +4,14 @@ using System.Globalization;
 namespace SystemBarIndicator.Configuration
 {
     /// <summary>
-    /// Цвет в настройках хранится строкой "#AARRGGBB" — файл редактируется руками,
-    /// а знаковое int-представление (-15132391) для этого непригодно.
+    /// Colours are stored in settings as "#AARRGGBB" strings — the file is meant to be
+    /// hand-edited, and a signed int representation (-15132391) is useless for that.
     /// </summary>
     public static class ColorCodec
     {
         public const string Default = "#FF191919";
 
-        /// <summary>Разбирает "#AARRGGBB" или "#RRGGBB" (альфа = FF). При ошибке — false.</summary>
+        /// <summary>Parses "#AARRGGBB" or "#RRGGBB" (alpha = FF). Returns false on failure.</summary>
         public static bool TryParse(string? text, out int argb)
         {
             argb = 0;
@@ -35,21 +35,21 @@ namespace SystemBarIndicator.Configuration
             return true;
         }
 
-        /// <summary>Форматирует ARGB в "#AARRGGBB".</summary>
+        /// <summary>Formats ARGB as "#AARRGGBB".</summary>
         public static string ToHex(int argb) =>
             "#" + unchecked((uint)argb).ToString("X8", CultureInfo.InvariantCulture);
 
-        /// <summary>Приводит строку к каноническому "#AARRGGBB"; мусор заменяет на <see cref="Default"/>.</summary>
+        /// <summary>Canonicalises a string to "#AARRGGBB"; garbage becomes <see cref="Default"/>.</summary>
         public static string Normalize(string? text) =>
             TryParse(text, out int argb) ? ToHex(argb) : Default;
 
-        /// <summary>Разбирает цвет, а при неудаче возвращает <paramref name="fallback"/>.</summary>
+        /// <summary>Parses a colour, returning <paramref name="fallback"/> on failure.</summary>
         public static int ParseOrDefault(string? text, int fallback) =>
             TryParse(text, out int argb) ? argb : fallback;
 
         /// <summary>
-        /// Тёмный ли фон — по относительной яркости (ITU-R BT.601). По ней выбирается
-        /// светлый или тёмный набор вспомогательных цветов для темы Custom.
+        /// Whether the background is dark, by relative luminance (ITU-R BT.601). This picks
+        /// the light or dark set of accent colours for the Custom theme.
         /// </summary>
         public static bool IsDark(int argb)
         {

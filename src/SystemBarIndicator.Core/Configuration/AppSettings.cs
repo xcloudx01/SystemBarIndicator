@@ -2,7 +2,7 @@ using System;
 
 namespace SystemBarIndicator.Configuration
 {
-    /// <summary>Тема оформления бара.</summary>
+    /// <summary>Visual theme of the bar.</summary>
     public static class ThemeNames
     {
         public const string Dark = "Dark";
@@ -14,38 +14,38 @@ namespace SystemBarIndicator.Configuration
     }
 
     /// <summary>
-    /// Пользовательские настройки: положение бара и внешний вид.
-    /// Хранится в JSON (см. <see cref="SettingsStore"/>), поэтому все поля —
-    /// автосвойства: System.Text.Json по умолчанию игнорирует обычные поля.
+    /// User settings: bar position and appearance.
+    /// Stored as JSON (see <see cref="SettingsStore"/>), which is why every member is an
+    /// auto-property: System.Text.Json ignores plain fields by default.
     /// </summary>
     public sealed class AppSettings
     {
-        /// <summary>Версия схемы файла — задел на будущие миграции.</summary>
+        /// <summary>File schema version — room for future migrations.</summary>
         public int SchemaVersion { get; set; } = 1;
 
-        // --- Положение бара ---
-        // Сохраняем ПРАВЫЙ край, а не Left: ширина окна подгоняется под контент уже
-        // после первого кадра, и подгонка удерживает именно правый край.
-        // null — позиция пользователем не задана, бар встаёт по панели задач.
+        // --- Bar position ---
+        // We store the RIGHT edge, not Left: the window width is fitted to the content only
+        // after the first frame, and that fit holds the right edge in place.
+        // null means the user never set a position, so the bar docks to the taskbar.
         public int? BarRight { get; set; }
         public int? BarTop { get; set; }
 
-        // --- Внешний вид ---
+        // --- Appearance ---
         public double Opacity { get; set; } = DefaultOpacity;
         public string Theme { get; set; } = ThemeNames.Dark;
 
-        /// <summary>Цвет фона для темы Custom в виде "#AARRGGBB".</summary>
+        /// <summary>Background colour for the Custom theme, as "#AARRGGBB".</summary>
         public string BackgroundColor { get; set; } = "#FF191919";
 
-        /// <summary>Масштаб шрифта относительно базового (9 pt / 7.5 pt).</summary>
+        /// <summary>Font scale relative to the base size (9 pt / 7.5 pt).</summary>
         public double FontScale { get; set; } = DefaultFontScale;
 
         public int UpdateIntervalMs { get; set; } = DefaultIntervalMs;
 
-        /// <summary>Показывать температуры в градусах Фаренгейта.</summary>
+        /// <summary>Show temperatures in degrees Fahrenheit.</summary>
         public bool UseFahrenheit { get; set; }
 
-        // --- Состав секций ---
+        // --- Which sections to show ---
         public bool ShowCpu { get; set; } = true;
         public bool ShowCpuTemp { get; set; } = true;
         public bool ShowRam { get; set; } = true;
@@ -64,13 +64,13 @@ namespace SystemBarIndicator.Configuration
 
         public const int DefaultIntervalMs = 1000;
 
-        /// <summary>Допустимые интервалы опроса, мс. Прочие округляются до ближайшего.</summary>
+        /// <summary>Allowed poll intervals, ms. Anything else is rounded to the nearest one.</summary>
         public static readonly int[] AllowedIntervalsMs = { 500, 1000, 2000, 5000 };
 
         /// <summary>
-        /// Возвращает копию с приведёнными в допустимый диапазон значениями.
-        /// Исходный объект не изменяется. Устойчива к любому содержимому файла:
-        /// JSON может подсунуть null в ненулевое свойство и NaN/бесконечность в число.
+        /// Returns a copy with every value clamped into its allowed range. The original is
+        /// left untouched. Robust against any file contents: JSON can slip a null into a
+        /// non-nullable property and NaN/infinity into a number.
         /// </summary>
         public AppSettings Normalized()
         {
@@ -88,14 +88,14 @@ namespace SystemBarIndicator.Configuration
 
             s.UpdateIntervalMs = NearestInterval(s.UpdateIntervalMs);
 
-            // Аннотации nullable не влияют на десериализацию (RespectNullableAnnotations
-            // по умолчанию выключен), поэтому строки проверяем на null явно.
+            // Nullable annotations do not affect deserialization (RespectNullableAnnotations
+            // is off by default), so strings are checked for null explicitly.
             if (!ThemeNames.IsKnown(s.Theme))
                 s.Theme = ThemeNames.Dark;
 
             s.BackgroundColor = ColorCodec.Normalize(s.BackgroundColor);
 
-            // Полностью пустой бар не поймать мышью — оставляем хотя бы CPU.
+            // A completely empty bar cannot be grabbed with the mouse — keep at least CPU.
             if (!s.ShowCpu && !s.ShowRam && !s.ShowGpu && !s.ShowDisk && !s.ShowNetwork &&
                 !s.ShowCpuTemp && !s.ShowGpuTemp)
             {
@@ -105,7 +105,7 @@ namespace SystemBarIndicator.Configuration
             return s;
         }
 
-        /// <summary>Ближайший допустимый интервал опроса.</summary>
+        /// <summary>The nearest allowed poll interval.</summary>
         public static int NearestInterval(int ms)
         {
             int best = DefaultIntervalMs;
@@ -143,9 +143,9 @@ namespace SystemBarIndicator.Configuration
         };
 
         /// <summary>
-        /// Отличаются ли настройки в части, требующей пересоздания ресурсов рисования
-        /// (шрифты и кисти). Прозрачность и интервал сюда не входят — они применяются
-        /// напрямую, без пересоздания GDI+-объектов.
+        /// Whether the settings differ in ways that require recreating the drawing resources
+        /// (fonts and brushes). Opacity and interval are excluded — they are applied
+        /// directly, without rebuilding any GDI+ objects.
         /// </summary>
         public bool DiffersInAppearance(AppSettings other) =>
             other is null ||

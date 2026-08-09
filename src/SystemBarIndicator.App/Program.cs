@@ -15,8 +15,8 @@ namespace SystemBarIndicator
         [STAThread]
         static void Main()
         {
-            // Один экземпляр на сессию: повторный запуск (в т.ч. двойной клик по ярлыку)
-            // просто завершается, чтобы не появлялись две полоски.
+            // One instance per session: a second launch (including a double-click on the
+            // shortcut) simply exits, so two bars never appear.
             System.Threading.Mutex instanceLock;
             bool isNewInstance;
             try
@@ -25,7 +25,7 @@ namespace SystemBarIndicator
             }
             catch (UnauthorizedAccessException)
             {
-                return; // экземпляр уже запущен (с другим уровнем прав)
+                return; // an instance is already running (possibly at another elevation level)
             }
 
             using (instanceLock)
@@ -45,7 +45,7 @@ namespace SystemBarIndicator
     {
         public enum TaskbarEdge { Bottom, Top }
 
-        // --- Win32: управление окном ---
+        // --- Win32: window management ---
         [DllImport("user32.dll")]
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
@@ -100,27 +100,27 @@ namespace SystemBarIndicator
         private const int HTCAPTION = 2;
         private const int WM_WINDOWPOSCHANGING = 0x0046;
         private const int WM_DISPLAYCHANGE = 0x007E;
-        // Окно отдаёт HTCAPTION на любой hit-test, поэтому нажатие система сразу
-        // превращает в SC_MOVE: клиентских WM_LBUTTONDOWN/UP не бывает, неклиентский
-        // WM_NCLBUTTONUP съедается, а WM_ENTERSIZEMOVE на клике без движения не приходит
-        // вовсе. Единственная точка, где виден весь жест целиком, — сам SC_MOVE.
+        // The window returns HTCAPTION for any hit-test, so the system turns a press straight
+        // into SC_MOVE: client-area WM_LBUTTONDOWN/UP never occur, the non-client
+        // WM_NCLBUTTONUP is swallowed, and WM_ENTERSIZEMOVE does not arrive at all for a
+        // click without movement. The only place the whole gesture is visible is SC_MOVE.
         private const int WM_SYSCOMMAND = 0x0112;
         private const int SC_MOVE = 0xF010;
 
-        // --- Геометрия полоски ---
-        private const int EdgePad = 8;      // отступ от краёв окна
-        private const int ValueGap = 10;    // после процентного значения
-        private const int TempGap = 6;      // после температуры
-        private const int SeparatorGap = 8; // после разделителя
+        // --- Bar geometry ---
+        private const int EdgePad = 8;      // padding from the window edges
+        private const int ValueGap = 10;    // after a percentage value
+        private const int TempGap = 6;      // after a temperature
+        private const int SeparatorGap = 8; // after a separator
 
-        // Базовые коэффициенты сглаживания откалиброваны под тик в 1 секунду;
-        // при другом интервале пересчитываются (SmoothingRates).
+        // The base smoothing coefficients are calibrated for a 1 s tick; at any other
+        // interval they are recomputed (SmoothingRates).
         private const float NetAlphaPerSecond = 0.4f;
         private const float DiskAlphaPerSecond = 0.4f;
         private const float ScaleDecayPerSecond = 0.97f;
 
-        // Числовые значения рисуются в слоте фиксированной ширины с прижатием вправо,
-        // чтобы секции не «дышали» при смене числа разрядов (9% ↔ 10%).
+        // Numeric values are drawn right-aligned in a fixed-width slot, so sections do not
+        // breathe as the digit count changes (9% ↔ 10%).
         private static readonly StringFormat ValueRightAligned = new StringFormat(StringFormat.GenericDefault)
         {
             Alignment = StringAlignment.Far,
@@ -128,14 +128,14 @@ namespace SystemBarIndicator
         };
 
 
-        // --- Сенсоры ---
+        // --- Sensors ---
         private CpuSensor? _cpuSensor;
         private readonly RamSensor _ramSensor = new();
         private DiskSensor? _diskSensor;
         private NetworkSensor? _networkSensor;
         private HardwareSensor? _hardwareSensor;
 
-        // --- Состояние и UI ---
+        // --- State and UI ---
         private readonly Timer _timer;
         private readonly Timer _topmostTimer;
         private readonly Timer _saveTimer;
@@ -147,35 +147,35 @@ namespace SystemBarIndicator
 
         private readonly SensorData _current = new();
 
-        // --- Настройки ---
-        private readonly string _settingsPath = SettingsStore.DefaultPath;
+        // --- Settings ---
+private readonly string _settingsPath = SettingsStore.DefaultPath;
         private AppSettings _settings;
         private BarTheme _theme;
         private bool _settingsDirty;
-        // Позиция считается заданной пользователем, только если он сам перетащил бар.
-        // Иначе бар обязан следовать за панелью задач при каждом запуске.
+        // The position counts as user-defined only if the user dragged the bar themselves.
+        // Otherwise the bar must follow the taskbar on every start.
         private bool _positionUserDefined;
         private bool _positionTrackingReady;
 
-        // «Защёлки» доступности датчиков: однажды появившаяся секция больше не исчезает,
-        // чтобы кратковременный сбой датчика (null → 0) не сдвигал компоновку.
+        // Sensor availability latches: once a section has appeared it never disappears, so a
+        // brief sensor dropout (null → 0) does not shift the layout.
         private bool _hasCpuTemp;
         private bool _hasGpu;
         private bool _hasGpuTemp;
 
-        private int _pendingBarWidth; // 0 — подгонка ширины окна не запланирована
+        private int _pendingBarWidth; // 0 means no width adjustment is scheduled
 
-        // Сглаживание и автомасштаб для «рваных» по природе индикаторов сети и диска.
+        // Smoothing and auto-scaling for the inherently jagged network and disk indicators.
         private readonly Ema _netDownEma = new(NetAlphaPerSecond);
         private readonly Ema _netUpEma = new(NetAlphaPerSecond);
-        private readonly AutoScale _netScale = new(floor: 64f, decay: ScaleDecayPerSecond);   // КБ/с
+        private readonly AutoScale _netScale = new(floor: 64f, decay: ScaleDecayPerSecond);   // KB/s
         private readonly Ema _diskReadEma = new(DiskAlphaPerSecond);
         private readonly Ema _diskWriteEma = new(DiskAlphaPerSecond);
-        private readonly AutoScale _diskScale = new(floor: 8f, decay: ScaleDecayPerSecond);   // МБ/с
+        private readonly AutoScale _diskScale = new(floor: 8f, decay: ScaleDecayPerSecond);   // MB/s
 
         public TaskbarEdge BarEdge { get; private set; } = TaskbarEdge.Bottom;
 
-        /// <summary>Доступность датчиков — окно настроек помечает ими недоступные секции.</summary>
+        /// <summary>Sensor availability — the settings window marks unavailable sections with it.</summary>
         public bool HasCpuTempSensor => _hasCpuTemp;
         public bool HasGpuSensor => _hasGpu;
         public bool HasGpuTempSensor => _hasGpuTemp;
@@ -197,8 +197,8 @@ namespace SystemBarIndicator
             _appIcon = LoadAppIcon();
             this.Icon = _appIcon;
             this.FormBorderStyle = FormBorderStyle.None;
-            // Всё окно отдаёт HTCAPTION, поэтому двойной клик по нему система приняла бы
-            // за двойной клик по заголовку и развернула окно — снимаем саму возможность.
+            // The whole window returns HTCAPTION, so a double-click would be treated as a
+            // double-click on the title bar and maximize it — remove the possibility.
             this.MaximizeBox = false;
             this.ShowInTaskbar = true;
             this.TopMost = true;
@@ -218,14 +218,14 @@ namespace SystemBarIndicator
             ApplySmoothingRates(_settings.UpdateIntervalMs);
             _timer.Start();
 
-            // Событийное удержание поверх обеспечивает WM_WINDOWPOSCHANGING;
-            // таймер — лишь редкая страховка (раньше был агрессивный интервал 200 мс).
+            // Staying on top is handled by WM_WINDOWPOSCHANGING; this timer is only a rare
+            // safety net (it used to run at an aggressive 200 ms interval).
             _topmostTimer = new Timer { Interval = 1000 };
             _topmostTimer.Tick += (s, e) => ForceTopMost();
             _topmostTimer.Start();
 
-            // Запись настроек откладывается: перетаскивание бара и движение ползунка
-            // не должны устраивать шторм обращений к диску.
+            // Settings writes are deferred: dragging the bar and moving a slider must not
+            // cause a storm of disk writes.
             _saveTimer = new Timer { Interval = 1500 };
             _saveTimer.Tick += (s, e) => { _saveTimer.Stop(); FlushSettings(); };
 
@@ -261,8 +261,9 @@ namespace SystemBarIndicator
             catch (Exception ex) { Logger.Error("HardwareSensor.init", ex); }
         }
 
-        // Иконка вшита в сборку как ресурс (см. EmbeddedResource в .csproj). Многоразмерная .ico:
-        // Windows сам берёт подходящий кадр (16 px для трея, крупнее — для окна/панели задач).
+        // The icon is embedded in the assembly as a resource (see EmbeddedResource in the
+        // .csproj). It is a multi-size .ico: Windows picks the right frame itself (16 px for
+        // the tray, larger ones for the window and taskbar).
         private static Icon LoadAppIcon()
         {
             using var stream = typeof(MainForm).Assembly
@@ -281,8 +282,9 @@ namespace SystemBarIndicator
 
         private void PositionOnTaskbar()
         {
-            // Фактическая ширина подгоняется под контент после первого обмера (ApplyBarWidth);
-            // здесь используем текущую, чтобы «Reset Position» не возвращал стартовые 520.
+            // The real width is fitted to the content after the first measurement
+            // (ApplyBarWidth); the current one is used here so "Reset Position" does not
+            // snap back to the initial 520.
             int barWidth = this.Width;
             const int margin = 10;
 
@@ -302,8 +304,8 @@ namespace SystemBarIndicator
                 }
                 else
                 {
-                    // Вертикальная панель задач (слева/справа, Windows 10):
-                    // закрепляем у нижнего края рабочей области экрана.
+                    // Vertical taskbar (left/right, Windows 10): dock to the bottom edge of
+                    // the screen's working area.
                     var wa = SystemInformation.WorkingArea;
                     this.Size = new Size(barWidth, 30);
                     this.Location = new Point(wa.Right - barWidth - margin, wa.Bottom - 34);
@@ -323,10 +325,10 @@ namespace SystemBarIndicator
         }
 
         /// <summary>
-        /// Возвращает бар туда, где пользователь его оставил. Восстанавливается ПРАВЫЙ край:
-        /// ширина окна ещё стартовая и будет подогнана под контент после первого кадра,
-        /// а подгонка (<see cref="ApplyPendingBarWidth"/>) удерживает именно правый край.
-        /// Высоту не восстанавливаем — она считается по панели задач.
+        /// Returns the bar to where the user left it. The RIGHT edge is what gets restored:
+        /// the window width is still the initial estimate and will be fitted to the content
+        /// after the first frame, and that fit (<see cref="ApplyPendingBarWidth"/>) holds the
+        /// right edge. The height is not restored — it is derived from the taskbar.
         /// </summary>
         private void TryRestoreSavedPosition()
         {
@@ -341,13 +343,13 @@ namespace SystemBarIndicator
                 var clamped = WindowPlacement.ClampToScreens(candidate, screens);
                 if (!WindowPlacement.IsUsable(clamped, screens))
                 {
-                    Logger.Warn($"Сохранённая позиция бара недоступна ({candidate}), встаём по панели задач.");
+                    Logger.Warn($"Saved bar position is unreachable ({candidate}); docking to the taskbar.");
                     return;
                 }
 
-                // Запоминаем починенную позицию, иначе в файле навсегда останется
-                // недостижимая точка и клэмп будет повторяться при каждом запуске.
-                Logger.Warn($"Сохранённая позиция бара скорректирована под текущие экраны: {candidate} → {clamped}.");
+                // Remember the repaired position, otherwise the file would keep an
+                // unreachable point forever and the clamp would repeat on every start.
+                Logger.Warn($"Saved bar position adjusted to the current screens: {candidate} → {clamped}.");
                 candidate = clamped;
                 _settings.BarRight = clamped.Right;
                 _settings.BarTop = clamped.Top;
@@ -360,8 +362,8 @@ namespace SystemBarIndicator
         }
 
         /// <summary>
-        /// Куда раскрывать оверлей, определяем по фактическому положению бара: после
-        /// перетаскивания в верхнюю половину экрана графики должны уходить вниз.
+        /// Which way the overlay opens is decided from the bar's actual position: once
+        /// dragged into the top half of the screen, the graphs must drop downwards.
         /// </summary>
         private void UpdateBarEdgeFromPosition()
         {
@@ -439,7 +441,7 @@ namespace SystemBarIndicator
                     _current.NetUp = net.uploadKBps;
                 }
 
-                // Сглаживаем мгновенную скорость и обновляем общую шкалу баров по пику.
+                // Smooth the instantaneous rate and update the shared bar scale from the peak.
                 float netDl = _netDownEma.Update(_current.NetDown);
                 float netUl = _netUpEma.Update(_current.NetUp);
                 _netScale.Update(Math.Max(netDl, netUl));
@@ -493,9 +495,9 @@ namespace SystemBarIndicator
             }
         }
 
-        // --- Настройки ---
+        // --- Settings ---
 
-        /// <summary>Копия текущих настроек — окно настроек правит её, не трогая рабочую.</summary>
+        /// <summary>A copy of the current settings — the settings window edits this one, not the live copy.</summary>
         public AppSettings CurrentSettings => _settings.Clone();
 
         private void OpenSettings()
@@ -506,17 +508,18 @@ namespace SystemBarIndicator
                 return;
             }
 
-            // Владелец, а не TopMost: бар принудительно всплывает в топ z-order раз в секунду,
-            // и обычное окно он бы перекрыл, а владение задаёт порядок надёжно.
+            // Ownership rather than TopMost: the bar forces itself to the top of the z-order
+            // once a second and would cover an ordinary window, whereas ownership fixes the
+            // order reliably.
             _settingsForm = new SettingsForm(this);
             _settingsForm.FormClosed += (s, e) => { _settingsForm = null; FlushSettings(); };
             _settingsForm.Show(this);
         }
 
         /// <summary>
-        /// Применяет настройки внешнего вида. Положение бара сюда не входит:
-        /// им управляют только перетаскивание и «Reset Position», иначе открытое окно
-        /// настроек затирало бы позицию своим устаревшим снимком.
+        /// Applies the appearance settings. The bar position is deliberately excluded: it is
+        /// governed only by dragging and "Reset Position", otherwise an open settings window
+        /// would overwrite the position with its own stale snapshot.
         /// </summary>
         public void ApplySettings(AppSettings incoming)
         {
@@ -532,8 +535,8 @@ namespace SystemBarIndicator
 
             if (rebuildTheme)
             {
-                // Сначала подменяем ссылку, потом освобождаем старые ресурсы: отрисовка
-                // идёт в этом же потоке синхронно, недорисованного кадра быть не может.
+                // Swap the reference first, then dispose the old resources: drawing happens
+                // synchronously on this same thread, so a half-drawn frame is impossible.
                 var oldTheme = _theme;
                 _theme = BarTheme.Create(next);
                 _graphOverlay?.ApplyTheme(_theme, next);
@@ -559,8 +562,9 @@ namespace SystemBarIndicator
         }
 
         /// <summary>
-        /// Приводит сглаживание к новому шагу опроса: базовые коэффициенты откалиброваны
-        /// под 1 секунду, иначе при 0.5 с индикаторы стали бы вдвое инертнее, а при 5 с — рваными.
+        /// Retunes the smoothing for a new poll step: the base coefficients are calibrated
+        /// for 1 s, so without this the indicators would be twice as sluggish at 0.5 s and
+        /// jagged at 5 s.
         /// </summary>
         private void ApplySmoothingRates(int intervalMs)
         {
@@ -599,7 +603,7 @@ namespace SystemBarIndicator
             }
         }
 
-        // --- Положение бара ---
+        // --- Bar position ---
 
         private void ResetPosition()
         {
@@ -612,8 +616,8 @@ namespace SystemBarIndicator
         }
 
         /// <summary>
-        /// Конец перетаскивания. Позицию пишем только когда она действительно
-        /// изменилась — иначе каждое касание бара тревожило бы диск.
+        /// End of a drag. The position is written only when it actually changed — otherwise
+        /// every touch of the bar would hit the disk.
         /// </summary>
         protected override void OnResizeEnd(EventArgs e)
         {
@@ -633,8 +637,8 @@ namespace SystemBarIndicator
         }
 
         /// <summary>
-        /// Смена конфигурации мониторов: бар мог остаться на исчезнувшем экране.
-        /// Если позицию не задавал пользователь — просто встаём обратно по панели задач.
+        /// Monitor reconfiguration: the bar may have been left on a screen that is now gone.
+        /// If the user never set a position, simply dock back to the taskbar.
         /// </summary>
         private void ReconcilePositionWithScreens()
         {
@@ -660,7 +664,7 @@ namespace SystemBarIndicator
                 }
                 else
                 {
-                    Logger.Warn("После смены конфигурации мониторов бар не помещается — возврат к панели задач.");
+                    Logger.Warn("The bar no longer fits after the monitor change; returning to the taskbar.");
                     PositionOnTaskbar();
                     return;
                 }
@@ -669,7 +673,7 @@ namespace SystemBarIndicator
             UpdateBarEdgeFromPosition();
         }
 
-        // --- Отрисовка ---
+        // --- Drawing ---
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -680,8 +684,8 @@ namespace SystemBarIndicator
 
             var s = _settings;
 
-            // Высота строки меряется на текущем Graphics: при PerMonitorV2 она следует
-            // за DPI монитора, на котором окно сейчас, — кэшировать её нельзя.
+            // The line height is measured on the current Graphics: under PerMonitorV2 it
+            // follows the DPI of whichever monitor the window is on, so it cannot be cached.
             int lineHeight = (int)Math.Ceiling(g.MeasureString("100%", _theme.MainFont).Height);
             int y = (this.Height - lineHeight) / 2;
 
@@ -750,14 +754,15 @@ namespace SystemBarIndicator
                 trailingGap = 0;
             }
 
-            // Ширина контента известна только после обмера в текущем DPI (слоты фиксированы,
-            // но их пиксельная ширина зависит от монитора, а состав секций — от настроек
-            // и «защёлок»). Подгоняем ширину окна вне цикла отрисовки, удерживая правый край.
+            // The content width is known only after measuring at the current DPI (slots are
+            // fixed, but their pixel width depends on the monitor, and which sections exist
+            // depends on the settings and the latches). The window width is adjusted outside
+            // the paint loop, holding the right edge.
             int desiredWidth = x - trailingGap + EdgePad;
             if (desiredWidth != this.Width && _pendingBarWidth != desiredWidth)
             {
-                // Коалесцирование: в очереди один callback, применяется последний обмер
-                // (при смене DPI устаревшее значение перезаписывается до применения).
+                // Coalescing: a single callback is queued and the last measurement wins (on a
+                // DPI change the stale value is overwritten before it is applied).
                 bool schedule = _pendingBarWidth == 0;
                 _pendingBarWidth = desiredWidth;
                 if (schedule)
@@ -765,8 +770,8 @@ namespace SystemBarIndicator
             }
         }
 
-        // Разделитель ставится ПЕРЕД секцией, если что-то уже нарисовано: при выключенных
-        // секциях иначе остались бы висящие палки и лишние отступы по краям.
+        // The separator is placed BEFORE a section if anything has been drawn already:
+        // otherwise disabled sections would leave dangling bars and stray edge padding.
         private int Separate(Graphics g, int x, int y, int lineHeight, ref bool anyDrawn)
         {
             if (anyDrawn)
@@ -778,8 +783,8 @@ namespace SystemBarIndicator
             return x;
         }
 
-        // Меняет ширину окна, сохраняя положение правого края (бар прижат к правой
-        // стороне панели задач, расти/сжиматься должен влево).
+        // Changes the window width while keeping the right edge in place (the bar sits at the
+        // right side of the taskbar, so it must grow and shrink leftwards).
         private void ApplyPendingBarWidth()
         {
             int width = _pendingBarWidth;
@@ -789,14 +794,14 @@ namespace SystemBarIndicator
 
             int right = this.Left + this.Width;
             var target = new Rectangle(right - width, this.Top, width, this.Height);
-            // Рост влево не должен утаскивать бар за левый край экрана.
+            // Growing leftwards must not drag the bar off the left edge of the screen.
             target = WindowPlacement.ClampTo(target, Screen.FromRectangle(target).Bounds);
             this.SetBounds(target.X, target.Y, target.Width, target.Height);
         }
 
-        // Диск и сеть рисуем парой горизонтальных баров: ▼ чтение/загрузка, ▲ запись/отдача.
-        // Значения сглажены (EMA), ширина баров фиксирована, у каждого ресурса свой
-        // автомасштаб — поэтому ничего не «прыгает».
+        // Disk and network are drawn as a pair of horizontal bars: ▼ read/download,
+        // ▲ write/upload. The values are smoothed (EMA), the bar width is fixed and each
+        // resource has its own auto-scale — which is why nothing jumps around.
         private int DrawDualBars(Graphics g, string label, float frac1, float frac2, Brush color1, Brush color2, int x, int y, int lineHeight)
         {
             float scale = (float)_settings.FontScale;
@@ -862,23 +867,23 @@ namespace SystemBarIndicator
             SizeF ls = g.MeasureString(label, _theme.SmallFont);
             x += (int)ls.Width + 2;
 
-            // Слот по самому широкому значению: правый край и знак «%» неподвижны.
+            // The slot is sized by the widest value: the right edge and the "%" never move.
             return DrawValueSlot(g, value, "100%", loadBrush, x, y, lineHeight);
         }
 
         private int DrawTemp(Graphics g, float celsius, int x, int y, int lineHeight)
         {
-            // Цвет всегда считается по Цельсию: пороги LoadLevels заданы в нём,
-            // единицы отображения на цветовую индикацию влиять не должны.
+            // The colour is always computed from Celsius: the LoadLevels thresholds are
+            // defined in it, and the display unit must not affect the colour coding.
             bool fahrenheit = _settings.UseFahrenheit;
             string text = Formatting.FormatTemperature(celsius, fahrenheit);
             string template = Formatting.TemperatureSlotTemplate(fahrenheit);
             return DrawValueSlot(g, text, template, GetTempBrush(celsius), x, y, lineHeight);
         }
 
-        // Рисует значение в слоте фиксированной ширины (по шаблону) с прижатием вправо.
-        // Ширина слота измеряется на текущем Graphics: при PerMonitorV2 она следует за DPI,
-        // поэтому пиксельную ширину нельзя кэшировать между кадрами.
+        // Draws a value right-aligned in a fixed-width slot (sized by a template).
+        // The slot width is measured on the current Graphics: under PerMonitorV2 it follows
+        // the DPI, so the pixel width must not be cached between frames.
         private int DrawValueSlot(Graphics g, string value, string template, Brush brush, int x, int y, int lineHeight)
         {
             int slotW = (int)Math.Ceiling(g.MeasureString(template, _theme.MainFont).Width);
@@ -903,9 +908,9 @@ namespace SystemBarIndicator
         {
             if (m.Msg == WM_SYSCOMMAND && ((long)m.WParam & 0xFFF0) == SC_MOVE)
             {
-                // Нажатие по бару система превращает в SC_MOVE. Обработчик по умолчанию
-                // возвращает управление только после отпускания кнопки, поэтому здесь же
-                // видно, чем жест оказался: бар не сдвинулся — это клик (открыть графики).
+                // The system turns a press on the bar into SC_MOVE. The default handler only
+                // returns once the button is released, so this is where the gesture resolves:
+                // if the bar did not move, it was a click (open the graphs).
                 var before = this.Location;
                 base.WndProc(ref m);
                 if (this.Location == before)
@@ -922,7 +927,7 @@ namespace SystemBarIndicator
             if (m.Msg == WM_DISPLAYCHANGE)
             {
                 base.WndProc(ref m);
-                // Отложенно: к моменту обработки система уже обновит список мониторов.
+                // Deferred: by the time it runs, the system has refreshed the monitor list.
                 if (this.IsHandleCreated && !this.IsDisposed)
                     BeginInvoke(new Action(ReconcilePositionWithScreens));
                 return;
@@ -930,8 +935,8 @@ namespace SystemBarIndicator
 
             if (m.Msg == WM_WINDOWPOSCHANGING)
             {
-                // Удерживаем окно поверх остальных, модифицируя z-order в самом сообщении.
-                // Это исключает рекурсию (повторный вызов SetWindowPos из обработчика).
+                // Keep the window above the rest by modifying the z-order in the message
+                // itself. This avoids recursion (calling SetWindowPos from the handler).
                 var wp = Marshal.PtrToStructure<WINDOWPOS>(m.LParam);
                 wp.hwndInsertAfter = HWND_TOPMOST;
                 wp.flags &= ~SWP_NOZORDER;
@@ -976,8 +981,8 @@ namespace SystemBarIndicator
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
-            // Шрифты и кисти освобождаем только когда окно уже уничтожено: между
-            // FormClosing и FormClosed ещё может прийти WM_PAINT.
+            // Fonts and brushes are released only once the window is destroyed: a WM_PAINT
+            // can still arrive between FormClosing and FormClosed.
             _theme.Dispose();
             base.OnFormClosed(e);
         }

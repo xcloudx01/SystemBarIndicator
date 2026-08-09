@@ -42,12 +42,12 @@ namespace SystemBarIndicator.Tests
         [InlineData(500, 500)]
         [InlineData(1000, 1000)]
         [InlineData(5000, 5000)]
-        [InlineData(137, 500)]      // ближе к 500
+        [InlineData(137, 500)]      // closer to 500
         [InlineData(0, 500)]
         [InlineData(-100, 500)]
-        [InlineData(1400, 1000)]    // 400 против 600 — ближе к 1000
+        [InlineData(1400, 1000)]    // 400 vs 600 — closer to 1000
         [InlineData(1700, 2000)]
-        [InlineData(999999, 5000)]  // ближе к максимуму
+        [InlineData(999999, 5000)]  // closer to the maximum
         public void Normalized_SnapsIntervalToAllowed(int value, int expected)
         {
             var s = new AppSettings { UpdateIntervalMs = value }.Normalized();
@@ -60,7 +60,7 @@ namespace SystemBarIndicator.Tests
         [InlineData("Custom", "Custom")]
         [InlineData("neon", "Dark")]
         [InlineData("", "Dark")]
-        [InlineData(null, "Dark")]      // JSON может подсунуть null в ненулевое свойство
+        [InlineData(null, "Dark")]      // JSON can slip a null into a non-nullable property
         public void Normalized_FallsBackToDarkForUnknownTheme(string? theme, string expected)
         {
             var s = new AppSettings { Theme = theme! }.Normalized();
@@ -70,7 +70,7 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void Normalized_RepairsBackgroundColor()
         {
-            Assert.Equal(ColorCodec.Default, new AppSettings { BackgroundColor = "не цвет" }.Normalized().BackgroundColor);
+            Assert.Equal(ColorCodec.Default, new AppSettings { BackgroundColor = "not a colour" }.Normalized().BackgroundColor);
             Assert.Equal(ColorCodec.Default, new AppSettings { BackgroundColor = null! }.Normalized().BackgroundColor);
             Assert.Equal("#FF102030", new AppSettings { BackgroundColor = "102030" }.Normalized().BackgroundColor);
         }
@@ -177,7 +177,7 @@ namespace SystemBarIndicator.Tests
 
             Assert.False(a.DiffersInAppearance(a.Clone()));
 
-            // Прозрачность и интервал применяются без пересоздания GDI+-ресурсов.
+            // Opacity and interval are applied without recreating any GDI+ resources.
             var sameLook = a.Clone();
             sameLook.Opacity = 0.4;
             sameLook.UpdateIntervalMs = 5000;

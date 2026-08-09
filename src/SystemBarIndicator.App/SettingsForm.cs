@@ -7,16 +7,16 @@ using SystemBarIndicator.Configuration;
 namespace SystemBarIndicator
 {
     /// <summary>
-    /// Окно настроек внешнего вида. Изменения применяются сразу (живой предпросмотр),
-    /// на диск они попадают отложенно — записью управляет <see cref="MainForm"/>.
-    /// Положение бара здесь не настраивается: его задаёт перетаскивание и «Reset Position».
+    /// The appearance settings window. Changes apply immediately (live preview) and reach
+    /// disk on a delay — the write is managed by <see cref="MainForm"/>.
+    /// The bar's position is not configured here: it comes from dragging and "Reset Position".
     /// </summary>
     internal sealed class SettingsForm : Form
     {
         private readonly MainForm _owner;
         private AppSettings _working;
-        // Пока значения раскладываются по контролам, их события не должны
-        // отправлять полусобранные настройки обратно в бар.
+        // While values are being loaded into the controls, their events must not push
+        // half-assembled settings back to the bar.
         private bool _loading;
 
         private readonly TrackBar _opacity = new();
@@ -119,10 +119,10 @@ namespace SystemBarIndicator
             Controls.Add(box);
         }
 
-        // Недоступный датчик помечаем, но галку не блокируем: он может появиться позже
-        // (например, после установки PawnIO), а настройка должна пережить это.
-        // AutoSize, а не фиксированная ширина: подпись длиннее колонки иначе обрезается,
-        // а при масштабировании по DPI ширина текста ещё и меняется.
+        // An unavailable sensor is marked but its checkbox is not disabled: it may show up
+        // later (after installing PawnIO, say), and the setting must survive that.
+        // AutoSize rather than a fixed width: a label longer than the column would otherwise
+        // be clipped, and DPI scaling changes the text width on top of that.
         private void SetUpCheck(CheckBox check, string text, Rectangle bounds, bool available, GroupBox box)
         {
             check.Text = available ? text : text + " (n/a)";
@@ -225,12 +225,12 @@ namespace SystemBarIndicator
             if (dialog.ShowDialog(this) != DialogResult.OK)
                 return;
 
-            // Фон бара непрозрачен — прозрачностью управляет отдельный ползунок.
+            // The bar background is opaque — transparency is controlled by its own slider.
             _working.BackgroundColor = ColorCodec.ToHex(Color.FromArgb(255, dialog.Color).ToArgb());
             Apply();
         }
 
-        /// <summary>Собирает настройки из контролов и отдаёт их бару для немедленного применения.</summary>
+        /// <summary>Collects settings from the controls and hands them to the bar to apply at once.</summary>
         private void Apply()
         {
             if (_loading)

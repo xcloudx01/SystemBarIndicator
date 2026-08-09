@@ -1,7 +1,7 @@
 namespace SystemBarIndicator.Monitoring
 {
     /// <summary>
-    /// Уровень нагрузки/нагрева для цветовой индикации.
+    /// Load/heat level used for colour coding.
     /// </summary>
     public enum LoadLevel
     {
@@ -12,12 +12,12 @@ namespace SystemBarIndicator.Monitoring
     }
 
     /// <summary>
-    /// Пороги перехода между уровнями нагрузки. Вынесены из UI, чтобы их можно
-    /// было покрыть тестами независимо от рисования.
+    /// Thresholds between load levels. Kept out of the UI so they can be tested
+    /// independently of drawing.
     /// </summary>
     public static class LoadLevels
     {
-        /// <summary>Уровень по доле нагрузки в диапазоне 0..1 (например, CPU/RAM/GPU).</summary>
+        /// <summary>Level from a load fraction in 0..1 (CPU/RAM/GPU, for example).</summary>
         public static LoadLevel FromFraction(float fraction)
         {
             if (fraction >= 0.9f) return LoadLevel.Critical;
@@ -26,7 +26,7 @@ namespace SystemBarIndicator.Monitoring
             return LoadLevel.Normal;
         }
 
-        /// <summary>Уровень по температуре в градусах Цельсия.</summary>
+        /// <summary>Level from a temperature in degrees Celsius.</summary>
         public static LoadLevel FromTemperature(float celsius)
         {
             if (celsius >= 90f) return LoadLevel.Critical;

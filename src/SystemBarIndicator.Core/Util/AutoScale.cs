@@ -3,29 +3,29 @@ using System;
 namespace SystemBarIndicator.Util
 {
     /// <summary>
-    /// Адаптивный масштаб «полной шкалы» для величин без фиксированного максимума
-    /// (например, скорость сети). Мгновенно поднимается под новый пик, чтобы значение
-    /// не выходило за шкалу, и плавно опускается, когда активность спадает.
+    /// Adaptive full-scale value for quantities with no fixed maximum (network speed,
+    /// for instance). Jumps up immediately to accommodate a new peak, so a value never
+    /// exceeds the scale, and decays gently once activity subsides.
     /// </summary>
     public sealed class AutoScale
     {
         private readonly float _floor;
         private float _decay;
 
-        /// <param name="floor">Минимальная полная шкала (значение никогда не опускается ниже).</param>
-        /// <param name="decay">Множитель затухания за шаг в (0..1), например 0.97.</param>
+        /// <param name="floor">Minimum full scale (the value never drops below it).</param>
+        /// <param name="decay">Per-step decay factor in (0..1), e.g. 0.97.</param>
         public AutoScale(float floor, float decay)
         {
             if (floor <= 0f)
-                throw new ArgumentOutOfRangeException(nameof(floor), floor, "floor должен быть положительным.");
+                throw new ArgumentOutOfRangeException(nameof(floor), floor, "floor must be positive.");
             _floor = floor;
             Decay = decay;
             Value = floor;
         }
 
         /// <summary>
-        /// Множитель затухания за шаг (0..1). Меняется на лету при смене интервала опроса —
-        /// см. <see cref="SmoothingRates.DecayForInterval"/>. Текущая шкала сохраняется.
+        /// Per-step decay factor (0..1). Changed on the fly when the poll interval changes —
+        /// see <see cref="SmoothingRates.DecayForInterval"/>. The current scale is kept.
         /// </summary>
         public float Decay
         {
@@ -33,22 +33,22 @@ namespace SystemBarIndicator.Util
             set
             {
                 if (value <= 0f || value >= 1f)
-                    throw new ArgumentOutOfRangeException(nameof(value), value, "decay должен быть в (0..1).");
+                    throw new ArgumentOutOfRangeException(nameof(value), value, "decay must be in (0..1).");
                 _decay = value;
             }
         }
 
-        /// <summary>Текущая полная шкала.</summary>
+        /// <summary>The current full scale.</summary>
         public float Value { get; private set; }
 
-        /// <summary>Обновляет шкалу по текущему значению и возвращает её.</summary>
+        /// <summary>Updates the scale from the current value and returns it.</summary>
         public float Update(float current)
         {
             Value = current > Value ? current : Math.Max(_floor, Value * _decay);
             return Value;
         }
 
-        /// <summary>Доля заполнения (0..1) для значения относительно текущей шкалы.</summary>
+        /// <summary>Fill fraction (0..1) of a value relative to the current scale.</summary>
         public float Fraction(float value)
         {
             if (Value <= 0f) return 0f;

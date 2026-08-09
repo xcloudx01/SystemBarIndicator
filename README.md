@@ -1,124 +1,182 @@
 # SystemBar Indicator
 
-Системный монитор для Windows 11, закреплённый поверх области панели задач. Отображает в реальном времени загрузку CPU, RAM, GPU, диска и сети, а также температуру CPU и GPU. По клику разворачивает оверлей с графиками истории.
+[![CI](https://github.com/coldneuro/SystemBarIndicator/actions/workflows/ci.yml/badge.svg)](https://github.com/coldneuro/SystemBarIndicator/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6)](#requirements)
 
-## Возможности
-
-- **CPU** — общая загрузка и температура
-- **RAM** — использование оперативной памяти (процент, занято/всего)
-- **GPU** — загрузка и температура (NVIDIA / AMD / Intel), при наличии — объём VRAM
-- **Диск** — чтение/запись (бар-индикатор со сглаживанием)
-- **Сеть** — загрузка/отдача (бар-индикатор со сглаживанием)
-- **Графики** — оверлей с историей последних ~120 измерений (плавные кривые)
-- **Always on top** — окно удерживается поверх панели задач
-- **Трей** — иконка с краткой сводкой и контекстным меню
-- **Запоминание положения** — бар возвращается туда, где его оставили, даже после перезапуска
-- **Настройки внешнего вида** — тема, прозрачность, размер шрифта, состав секций,
-  интервал опроса, °C/°F
-
-## Технологический стек
-
-| Слой | Технология |
-|------|------------|
-| Язык | C# |
-| UI-фреймворк | Windows Forms |
-| Runtime | .NET 10 (`net10.0-windows`) |
-| Графика | GDI+ (`System.Drawing`) |
-| Загрузка/RAM/диск/сеть | PerformanceCounter, `GlobalMemoryStatusEx`, `NetworkInterface` |
-| Температуры и GPU | [LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) 0.9.6 |
-| Доступ к датчикам CPU | [PawnIO](https://pawnio.eu) — подписанный драйвер ядра (вместо уязвимого WinRing0) |
-
-## Требования
-
-- Windows 10 (Build 19041+) или Windows 11
-- .NET 10 SDK
-- Запуск с правами администратора — для чтения температур (загрузка драйвера датчиков)
-- **PawnIO** — для температуры CPU. Это подписанный драйвер ядра, который LibreHardwareMonitor 0.9.5+
-  использует вместо уязвимого WinRing0 (его помечает Microsoft Defender). Установить один раз
-  с [pawnio.eu](https://pawnio.eu). Без PawnIO всё работает, кроме температуры CPU — и, что важно,
-  уязвимый драйвер не загружается.
-
-## Структура проекта
+A small always-on-top system monitor that sits on the Windows 11 taskbar. It shows live
+CPU, RAM, GPU, disk and network load plus CPU/GPU temperature, and expands into a
+history-graph overlay when you click it.
 
 ```
-SystemBarIndicator/
-├── src/
-│   ├── SystemBarIndicator.Core/      # net10.0 — ядро без зависимостей от WinForms (тестируемое)
-│   │   ├── Models/
-│   │   │   ├── SensorData.cs         #   Текущий снимок показаний
-│   │   │   └── DataHistory.cs        #   Кольцевая история измерений
-│   │   ├── Monitoring/LoadLevel.cs   #   Пороги нагрузки/температуры
-│   │   ├── Configuration/            #   Настройки: модель, JSON-хранилище, проверка позиции
-│   │   │   ├── AppSettings.cs        #     Модель + нормализация значений
-│   │   │   ├── SettingsStore.cs      #     Чтение/атомарная запись settings.json
-│   │   │   ├── WindowPlacement.cs    #     Видимость сохранённой позиции на текущих экранах
-│   │   │   └── ColorCodec.cs         #     Цвет как "#AARRGGBB" + яркость фона
-│   │   └── Util/Formatting.cs        #   Форматирование скоростей
-│   └── SystemBarIndicator.App/       # net10.0-windows — WinForms UI + Windows-сенсоры
-│       ├── Program.cs                #   Точка входа + MainForm (бар на панели задач)
-│       ├── GraphOverlay.cs           #   Всплывающий оверлей с графиками
-│       ├── SettingsForm.cs           #   Окно настроек (живой предпросмотр)
-│       ├── BarTheme.cs               #   Сменяемые GDI+ ресурсы (тема, масштаб шрифта)
-│       ├── Sensors/                  #   Источники данных
-│       │   ├── CpuSensor.cs          #     Загрузка CPU (PerformanceCounter)
-│       │   ├── RamSensor.cs          #     RAM (GlobalMemoryStatusEx)
-│       │   ├── DiskSensor.cs         #     Диск (PerformanceCounter PhysicalDisk)
-│       │   ├── NetworkSensor.cs      #     Сеть (NetworkInterface / IPv4-статистика)
-│       │   └── HardwareSensor.cs     #     CPU/GPU температура и загрузка (LibreHardwareMonitor)
-│       ├── Logging/Logger.cs         #   Файловый логгер
-│       ├── app.manifest
-│       └── SystemBarIndicator.csproj
-├── tests/
-│   └── SystemBarIndicator.Tests/     # net10.0 — xUnit, покрывают логику Core
-├── .github/workflows/ci.yml          # Сборка + тесты (windows-latest, .NET 10)
-├── Directory.Build.props             # Общие настройки (Nullable, TreatWarningsAsErrors)
-├── README.md
-├── ROADMAP.md                        # Долгосрочный план (опережает текущую реализацию)
-└── SUGGESTIONS.md                    # Идеи и предложения
+┃ CPU  12%  45C ┃ RAM  63% ┃ GPU   4%  38C ┃ D ▄▁ ┃ N ▁▆ ┃
+   └ load  └ temp                            │      └ down / up
+                                             └ read / write
 ```
 
-> Примечание: `ROADMAP.md` и `SUGGESTIONS.md` описывают желаемое развитие (в т.ч. возможный переход на WinUI 3, окно настроек, автообновление). Текущая реализация — то, что перечислено выше.
+Each section is a fixed-width slot, so the numbers never shift sideways as values change.
+`D` and `N` are drawn as a pair of bars instead of numbers: the top bar is disk read /
+network download, the bottom one is disk write / network upload.
 
-## Сборка, тесты и запуск
+## Features
 
-```bash
-git clone <repository-url>
-cd "SystemBarIndicator"
-dotnet build -c Release          # сборка (предупреждения трактуются как ошибки)
-dotnet test  -c Release          # юнит-тесты (xUnit)
-dotnet run --project src/SystemBarIndicator.App   # запуск
+- **CPU** — total load and temperature
+- **RAM** — memory usage
+- **GPU** — load and temperature (NVIDIA / AMD / Intel)
+- **Disk** — read/write throughput as a smoothed dual bar
+- **Network** — download/upload throughput as a smoothed dual bar
+- **Graph overlay** — click the bar for eight history charts (CPU, CPU temp, RAM, GPU,
+  GPU temp, disk R/W, net down, net up) over the last ~120 samples
+- **Load colouring** — values change colour as load crosses the warning/critical thresholds
+- **Always on top** — the bar keeps its z-order above the taskbar
+- **Tray icon** — shows `CPU / RAM / GPU` in the tooltip, with a context menu
+- **Remembered position** — drag the bar anywhere; it returns there after a restart, and
+  is pulled back on screen if that spot no longer exists
+- **Appearance settings** — theme, opacity, font scale, which sections to show, poll
+  interval, °C/°F
+
+## Requirements
+
+- Windows 10 (build 19041+) or Windows 11
+- [.NET 10 SDK](https://dotnet.microsoft.com/download) — to build; the published app needs
+  only the .NET 10 desktop runtime
+- Administrator rights — required to read hardware temperatures (the sensor driver is
+  loaded into the kernel)
+- [PawnIO](https://pawnio.eu) — **optional**, needed only for CPU temperature. See
+  [Permissions and privacy](#permissions-and-privacy) below
+
+## Install
+
+### Option 1 — install script (recommended)
+
+Publishes the app, then sets it up so a desktop shortcut launches it **elevated without a
+UAC prompt every time**:
+
+```powershell
+git clone https://github.com/coldneuro/SystemBarIndicator.git
+cd SystemBarIndicator
+pwsh -File deploy/Install.ps1            # add -AutoStart to also start it at logon
 ```
 
-Лог приложения пишется в `%LOCALAPPDATA%\SystemBarIndicator\app.log`.
+You get exactly one UAC prompt during installation — for registering the scheduled task.
+See [deploy/README.md](deploy/README.md) for how and why this works, and for uninstalling.
 
-## Настройки
+### Option 2 — run from source
 
-Меню трея (правый клик по иконке):
+```powershell
+git clone https://github.com/coldneuro/SystemBarIndicator.git
+cd SystemBarIndicator
+dotnet run --project src/SystemBarIndicator.App
+```
 
-| Пункт | Что делает |
+Started this way the app is **not** elevated, so temperatures will be unavailable —
+everything else works.
+
+## Usage
+
+Right-click the tray icon:
+
+| Item | Action |
+|------|--------|
+| **Graphs** | Open/close the history overlay (same as clicking the bar itself) |
+| **Settings...** | Appearance settings window |
+| **Reset Position** | Snap the bar back to the taskbar and forget the saved position |
+| **Exit** | Quit |
+
+**Moving it.** Drag the bar with the mouse — the position is remembered and restored on
+the next start. Until you move it, the bar docks to the right edge of the taskbar and
+follows it. If the saved spot becomes unreachable (monitor unplugged, resolution changed),
+the bar is moved back into the visible area.
+
+**Appearance** (`Settings...`, applied live):
+
+- opacity, 30–100 %
+- theme: dark, light, or a custom background colour
+- font scale, 75–175 %
+- which sections to show: CPU, CPU temp, RAM, GPU, GPU temp, disk, network
+- poll interval: 0.5 / 1 / 2 / 5 s — smoothing rates are recalibrated with it
+- temperature in °C or °F
+
+## Configuration files
+
+| Path | Contents |
+|------|----------|
+| `%LOCALAPPDATA%\SystemBarIndicator\settings.json` | Settings — safe to edit by hand; invalid values are silently replaced with valid ones |
+| `%LOCALAPPDATA%\SystemBarIndicator\app.log` | Application log |
+
+Writes are atomic (temp file + move), and a corrupt or missing settings file falls back to
+defaults rather than failing to start.
+
+## Permissions and privacy
+
+This app reads hardware sensors, so it is worth being explicit about what it does:
+
+- **No network access.** Nothing is sent anywhere; there is no telemetry, no update check,
+  no analytics. Network counters are read locally from the OS.
+- **Why administrator rights.** Temperatures come from
+  [LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor),
+  which reads CPU sensors through a kernel driver — that needs elevation. Load, RAM, disk
+  and network figures do not; without elevation the app simply omits temperatures.
+- **PawnIO instead of WinRing0.** LibreHardwareMonitor 0.9.5+ uses the signed
+  [PawnIO](https://pawnio.eu) driver rather than WinRing0, which Microsoft Defender flags
+  as vulnerable. PawnIO is installed separately and only once. Without it you lose CPU
+  temperature — and importantly, the vulnerable driver is never loaded.
+- **The bundled manifest is `asInvoker`**, not `requireAdministrator`. Elevation is
+  arranged by the install script through a scheduled task, so nothing silently elevates
+  itself.
+
+## Tech stack
+
+| Layer | Technology |
 |-------|------------|
-| **Graphs** | Открыть/закрыть оверлей с графиками (то же — клик по самому бару) |
-| **Settings...** | Окно настроек внешнего вида |
-| **Reset Position** | Вернуть бар к панели задач и забыть сохранённое положение |
-| **Exit** | Выход |
+| Language | C# |
+| UI | Windows Forms |
+| Runtime | .NET 10 (`net10.0-windows`) |
+| Drawing | GDI+ (`System.Drawing`) |
+| CPU / RAM / disk / network | `PerformanceCounter`, `GlobalMemoryStatusEx`, `NetworkInterface` |
+| Temperatures and GPU | [LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) 0.9.6 |
+| CPU sensor access | [PawnIO](https://pawnio.eu) — signed kernel driver |
 
-**Положение.** Бар перетаскивается мышью; после перетаскивания положение запоминается и
-восстанавливается при следующем запуске. Пока бар не двигали, он, как и раньше, встаёт
-у правого края панели задач и следует за ней. Если сохранённая точка стала недоступна
-(монитор отключили, разрешение изменилось), бар вдвигается обратно в видимую область.
+## Project layout
 
-**Внешний вид** (окно `Settings...`, изменения применяются сразу):
+```
+src/
+├── SystemBarIndicator.Core/       # net10.0 — platform-independent, unit-tested
+│   ├── Models/                    #   SensorData, DataPoint, DataHistory
+│   ├── Monitoring/                #   Load levels and thresholds
+│   ├── Configuration/             #   AppSettings, SettingsStore, WindowPlacement, ColorCodec
+│   └── Util/                      #   Formatting, Ema, AutoScale, SmoothingRates
+└── SystemBarIndicator.App/        # net10.0-windows — WinForms UI + Windows sensors
+    ├── Program.cs                 #   Entry point + MainForm (the taskbar bar)
+    ├── GraphOverlay.cs            #   History graph overlay
+    ├── SettingsForm.cs            #   Appearance settings, live preview
+    ├── BarTheme.cs                #   Swappable GDI+ resources (theme, font scale)
+    ├── Sensors/                   #   Cpu, Ram, Disk, Network, Hardware (LHM)
+    └── Logging/Logger.cs          #   File logger
 
-- прозрачность (30–100 %);
-- тема: тёмная, светлая или свой цвет фона;
-- размер шрифта (75–175 %);
-- состав секций: CPU, температура CPU, RAM, GPU, температура GPU, диск, сеть;
-- интервал опроса: 0.5 / 1 / 2 / 5 с;
-- температура в °C или °F.
+tests/SystemBarIndicator.Tests/    # net10.0 — xUnit, covers Core
+deploy/                            # Install/Uninstall scripts (see deploy/README.md)
+```
 
-Настройки лежат в `%LOCALAPPDATA%\SystemBarIndicator\settings.json` — файл можно править
-руками, некорректные значения приложение молча заменит на допустимые.
+Anything that does not depend on WinForms or on the OS lives in `Core` and is unit-tested;
+UI and OS access (P/Invoke, `PerformanceCounter`, LHM) live in `App`. `CLAUDE.md` holds the
+detailed architecture notes — the non-obvious constraints behind the current design.
 
-## Лицензия
+## Build and test
 
-MIT
+```powershell
+dotnet build -c Release      # warnings are errors — see Directory.Build.props
+dotnet test  -c Release      # xUnit
+```
+
+CI runs the same two commands on `windows-latest` for every push and pull request.
+
+## Contributing
+
+Bug reports and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+For anything security-related, see [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE)

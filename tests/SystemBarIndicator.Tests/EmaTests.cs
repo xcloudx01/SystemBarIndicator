@@ -29,7 +29,7 @@ namespace SystemBarIndicator.Tests
             ema.Update(0f);
             for (int i = 0; i < 200; i++)
                 ema.Update(500f);
-            Assert.True(Math.Abs(ema.Value - 500f) < 0.5f, $"ожидалось ~500, получено {ema.Value}");
+            Assert.True(Math.Abs(ema.Value - 500f) < 0.5f, $"expected ~500, got {ema.Value}");
         }
 
         [Fact]
@@ -37,7 +37,7 @@ namespace SystemBarIndicator.Tests
         {
             var ema = new Ema(0.3f);
             ema.Update(0f);
-            // Чередование 0 и 1000 — сглаженное значение держится в середине, не прыгает на всю амплитуду.
+            // Alternating 0 and 1000 — the smoothed value stays mid-range instead of swinging fully.
             ema.Update(1000f);
             ema.Update(0f);
             ema.Update(1000f);
@@ -56,7 +56,7 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void Alpha_CanBeChangedOnTheFly_KeepingAccumulatedValue()
         {
-            // Смена интервала опроса меняет alpha, но не должна сбрасывать сглаженное значение.
+            // Changing the poll interval changes alpha, but must not reset the smoothed value.
             var ema = new Ema(0.5f);
             ema.Update(100f);
 

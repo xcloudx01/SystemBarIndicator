@@ -12,8 +12,8 @@ namespace SystemBarIndicator.Tests
 
         public SettingsStoreTests()
         {
-            // Отдельный каталог на тест: атомарная запись оставляет рядом .tmp,
-            // а GetTempFileName ещё и создаёт пустой файл — обоих эффектов не хотим.
+            // A separate directory per test: the atomic write leaves a .tmp alongside, and
+            // GetTempFileName also creates an empty file — we want neither effect here.
             _dir = Path.Combine(Path.GetTempPath(), "sbi-tests-" + Path.GetRandomFileName());
             Directory.CreateDirectory(_dir);
             _path = Path.Combine(_dir, SettingsStore.FileName);
@@ -90,8 +90,8 @@ namespace SystemBarIndicator.Tests
         [InlineData(nameof(AppSettings.ShowNetwork))]
         public void Save_WritesEverySectionFlag(string propertyName)
         {
-            // Флаги должны быть именно свойствами: обычные поля System.Text.Json
-            // молча пропустил бы, и состав секций не сохранялся бы вовсе.
+            // The flags must be properties: System.Text.Json would silently skip plain
+            // fields, and the section selection would never be persisted at all.
             SettingsStore.Save(_path, new AppSettings());
             Assert.Contains(propertyName, File.ReadAllText(_path), StringComparison.Ordinal);
         }
@@ -113,7 +113,7 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void Load_BrokenJson_ReturnsDefaultsAndReportsError()
         {
-            File.WriteAllText(_path, "{{{ это не json");
+            File.WriteAllText(_path, "{{{ this is not json");
 
             var s = SettingsStore.Load(_path, out var error);
 
@@ -124,7 +124,8 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void Load_NullDocument_ReturnsDefaults()
         {
-            // "null" — валидный JSON, дающий null: без явной проверки был бы NullReferenceException.
+            // "null" is valid JSON that yields null: without an explicit check this would
+            // be a NullReferenceException.
             File.WriteAllText(_path, "null");
 
             var s = SettingsStore.Load(_path, out var error);
@@ -147,7 +148,7 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void Load_NullStringProperty_DoesNotProduceNullTheme()
         {
-            // Аннотации nullable на десериализацию не влияют — null долетит до свойства.
+            // Nullable annotations do not affect deserialization — null reaches the property.
             File.WriteAllText(_path, "{\"Theme\": null, \"BackgroundColor\": null}");
 
             var s = SettingsStore.Load(_path, out var error);
@@ -173,7 +174,7 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void Load_UnknownFields_AreIgnored()
         {
-            File.WriteAllText(_path, "{\"Opacity\": 0.8, \"СовершенноНовоеПоле\": [1,2,3]}");
+            File.WriteAllText(_path, "{\"Opacity\": 0.8, \"BrandNewField\": [1,2,3]}");
 
             var s = SettingsStore.Load(_path, out var error);
 
@@ -184,8 +185,8 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void Load_JsonWithCommentsAndTrailingComma_IsAccepted()
         {
-            // Файл заявлен как редактируемый руками — мелкие вольности не должны его ронять.
-            File.WriteAllText(_path, "{\n  // прозрачность\n  \"Opacity\": 0.6,\n}");
+            // The file is documented as hand-editable — small liberties must not break it.
+            File.WriteAllText(_path, "{\n  // opacity\n  \"Opacity\": 0.6,\n}");
 
             var s = SettingsStore.Load(_path, out var error);
 
@@ -196,7 +197,7 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void Save_NonFiniteValues_DoNotThrow()
         {
-            // NaN нельзя записать в JSON — Save обязан сохранять нормализованную копию.
+            // NaN cannot be written to JSON — Save must persist a normalized copy.
             var broken = new AppSettings { Opacity = double.NaN, FontScale = double.PositiveInfinity };
 
             SettingsStore.Save(_path, broken);

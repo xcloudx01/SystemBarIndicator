@@ -8,8 +8,8 @@ namespace SystemBarIndicator.Tests
         [Theory]
         [InlineData("#FF191919", unchecked((int)0xFF191919))]
         [InlineData("FF191919", unchecked((int)0xFF191919))]
-        [InlineData("#191919", unchecked((int)0xFF191919))]      // без альфы — непрозрачный
-        [InlineData("#ff191919", unchecked((int)0xFF191919))]    // регистр не важен
+        [InlineData("#191919", unchecked((int)0xFF191919))]      // no alpha means opaque
+        [InlineData("#ff191919", unchecked((int)0xFF191919))]    // case does not matter
         [InlineData("  #FF191919  ", unchecked((int)0xFF191919))]
         [InlineData("#80FFFFFF", unchecked((int)0x80FFFFFF))]
         public void TryParse_AcceptsSupportedForms(string text, int expected)
@@ -47,14 +47,14 @@ namespace SystemBarIndicator.Tests
         {
             Assert.Equal("#FF191919", ColorCodec.Normalize("191919"));
             Assert.Equal("#FF191919", ColorCodec.Normalize("#ff191919"));
-            Assert.Equal(ColorCodec.Default, ColorCodec.Normalize("мусор"));
+            Assert.Equal(ColorCodec.Default, ColorCodec.Normalize("garbage"));
             Assert.Equal(ColorCodec.Default, ColorCodec.Normalize(null));
         }
 
         [Fact]
         public void ParseOrDefault_UsesFallbackOnGarbage()
         {
-            Assert.Equal(7, ColorCodec.ParseOrDefault("не цвет", 7));
+            Assert.Equal(7, ColorCodec.ParseOrDefault("not a colour", 7));
             Assert.Equal(unchecked((int)0xFF010203), ColorCodec.ParseOrDefault("#FF010203", 7));
         }
 
@@ -64,8 +64,8 @@ namespace SystemBarIndicator.Tests
         [InlineData(unchecked((int)0xFF202030), true)]
         [InlineData(unchecked((int)0xFFFFFFFF), false)]
         [InlineData(unchecked((int)0xFFF0F0F0), false)]
-        [InlineData(unchecked((int)0xFF00FF00), false)]   // зелёный ярче порога
-        [InlineData(unchecked((int)0xFF0000FF), true)]    // синий — тёмный по яркости
+        [InlineData(unchecked((int)0xFF00FF00), false)]   // green is brighter than the threshold
+        [InlineData(unchecked((int)0xFF0000FF), true)]    // blue counts as dark by luminance
         public void IsDark_FollowsRelativeLuminance(int argb, bool expected)
         {
             Assert.Equal(expected, ColorCodec.IsDark(argb));

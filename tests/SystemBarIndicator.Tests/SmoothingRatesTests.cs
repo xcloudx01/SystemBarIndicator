@@ -36,8 +36,8 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void AlphaForInterval_TwoShortStepsEqualOneLongStep()
         {
-            // Смысл пересчёта: за одну секунду сглаживание «съедает» одинаковую долю
-            // независимо от того, за сколько шагов эта секунда набрана.
+            // The point of the recalculation: over one second the smoothing consumes the
+            // same fraction regardless of how many steps make up that second.
             float half = SmoothingRates.AlphaForInterval(0.4f, 500);
             float retainedAfterTwoSteps = (1f - half) * (1f - half);
 
@@ -51,7 +51,7 @@ namespace SystemBarIndicator.Tests
             {
                 float alpha = SmoothingRates.AlphaForInterval(0.4f, ms);
                 Assert.InRange(alpha, 0.0001f, 1f);
-                _ = new Ema(alpha); // конструктор Ema не должен ругаться на результат
+                _ = new Ema(alpha); // the Ema constructor must accept the result
             }
         }
 
@@ -88,8 +88,8 @@ namespace SystemBarIndicator.Tests
             float half = SmoothingRates.DecayForInterval(0.97f, 500);
             float five = SmoothingRates.DecayForInterval(0.97f, 5000);
 
-            Assert.True(half > 0.97f);            // за полшага спадает меньше
-            Assert.True(five < 0.97f);            // за пять секунд — сильнее
+            Assert.True(half > 0.97f);            // half a step decays less
+            Assert.True(five < 0.97f);            // five seconds decays more
             Assert.Equal(MathF.Pow(0.97f, 5f), five, 4);
         }
 
@@ -107,7 +107,7 @@ namespace SystemBarIndicator.Tests
             {
                 float decay = SmoothingRates.DecayForInterval(0.97f, ms);
                 Assert.InRange(decay, 0.0001f, 0.9999f);
-                _ = new AutoScale(1f, decay); // конструктор AutoScale не должен ругаться
+                _ = new AutoScale(1f, decay); // the AutoScale constructor must accept it
             }
         }
 

@@ -1,61 +1,62 @@
-# Развёртывание SystemBar Indicator
+# Deployment
 
-Воспроизводимая установка на рабочий стол: публикация, иконка, запуск **с правами
-администратора без запроса UAC** при каждом двойном клике.
+A reproducible desktop install: publish, icon, and **elevated launch with no UAC prompt**
+on every double-click.
 
-## Зачем так
+## Why it works this way
 
-Приложению нужны права администратора, чтобы читать датчики CPU (драйвер ядра **PawnIO**
-через LibreHardwareMonitor). Манифест приложения — `asInvoker`, поэтому ярлык с флагом
-«запуск от администратора» спрашивал бы UAC **каждый раз**. Вместо этого:
+The app needs administrator rights to read CPU sensors (the **PawnIO** kernel driver, via
+LibreHardwareMonitor). Its manifest is `asInvoker`, so a shortcut with the "run as
+administrator" flag would prompt for UAC **every single time**. Instead:
 
-- регистрируется **назначенное задание** (Task Scheduler) с уровнем «наивысшие права»;
-- ярлык запускает не exe, а тихий `launch.vbs`, который дёргает это задание
-  (`wscript → schtasks /run`);
-- запуск **собственного** задания повышения прав не требует → запроса UAC нет.
+- a **scheduled task** is registered (Task Scheduler) with `RunLevel=Highest`;
+- the shortcut does not point at the exe but at a silent `launch.vbs`, which triggers that
+  task (`wscript` → `schtasks /run`);
+- triggering **your own** task does not require elevation → no UAC prompt.
 
-Права администратора нужны только для *регистрации* задания, поэтому скрипт сам
-повышается ровно на этом шаге (один запрос UAC за всю установку).
+Administrator rights are needed only to *register* the task, so the script self-elevates
+for exactly that step — one UAC prompt for the whole installation.
 
-## Установка
+## Install
 
 ```powershell
 pwsh -File deploy/Install.ps1
 ```
 
-С автозапуском при входе в Windows (тоже без UAC):
+With auto-start at Windows sign-in (also without UAC):
 
 ```powershell
 pwsh -File deploy/Install.ps1 -AutoStart
 ```
 
-Что делает скрипт:
+What the script does:
 
-1. `dotnet publish` в `%LOCALAPPDATA%\Programs\SystemBarIndicator` (плоская раскладка —
-   LHM 0.9.6 поставляется как RID-split пакет).
-2. Кладёт `launch.vbs` (скрытый запускатель задания).
-3. Регистрирует задание `SystemBarIndicator` (наивысшие права; **здесь один UAC**).
-4. Создаёт на рабочем столе ярлык `SystemBar Indicator` с иконкой приложения и
-   **снятым** флагом «запуск от администратора».
+1. `dotnet publish` into `%LOCALAPPDATA%\Programs\SystemBarIndicator` (flat layout — LHM
+   0.9.6 ships as a RID-split package).
+2. Writes `launch.vbs` (the hidden task launcher).
+3. Registers the `SystemBarIndicator` task with highest privileges (**the one UAC prompt**).
+4. Creates a `SystemBar Indicator` desktop shortcut with the app icon and the "run as
+   administrator" flag explicitly **cleared**.
 
-После установки — двойной клик по ярлыку запускает индикатор от администратора без запроса.
+After that, double-clicking the shortcut starts the indicator elevated, with no prompt.
 
-## Удаление
+## Uninstall
 
 ```powershell
-pwsh -File deploy/Uninstall.ps1               # снять задание, убрать ярлык и launch.vbs
-pwsh -File deploy/Uninstall.ps1 -RemoveFiles  # плюс удалить папку установки
+pwsh -File deploy/Uninstall.ps1               # remove task, shortcut and launch.vbs
+pwsh -File deploy/Uninstall.ps1 -RemoveFiles  # also delete the install directory
 ```
 
-## Требования
+## Requirements
 
-- .NET 10 SDK (для `dotnet publish`).
-- **PawnIO** — для температуры CPU (один раз с [pawnio.eu](https://pawnio.eu)). Без него
-  всё работает, кроме температуры CPU; уязвимый драйвер при этом не загружается.
+- .NET 10 SDK (for `dotnet publish`).
+- **PawnIO** — for CPU temperature, installed once from [pawnio.eu](https://pawnio.eu).
+  Without it everything works except CPU temperature, and the vulnerable WinRing0 driver is
+  never loaded.
 
-## Замечание по кодировке
+## Note on encoding
 
-`Install.ps1` и `Uninstall.ps1` намеренно написаны **только ASCII-символами**. Скрипт с
-кириллицей, сохранённый как UTF-8 без BOM и перечитанный `powershell.exe` (Windows
-PowerShell 5.1) как ANSI-кодировка, портится — из-за этого задание один раз
-зарегистрировалось в папке с «кракозябра»-именем. Тексты для исполняемых `.ps1` держим в ASCII.
+`Install.ps1` and `Uninstall.ps1` are deliberately **ASCII-only**. A script containing
+non-ASCII characters, saved as UTF-8 without a BOM and re-read by `powershell.exe`
+(Windows PowerShell 5.1) under the ANSI code page, gets corrupted — that once caused the
+task to be registered under a mojibake folder name. Keep executable `.ps1` text ASCII.

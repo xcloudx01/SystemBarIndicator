@@ -6,13 +6,14 @@ using SystemBarIndicator.Configuration;
 namespace SystemBarIndicator
 {
     /// <summary>
-    /// Ресурсы рисования бара и оверлея, зависящие от настроек (тема + масштаб шрифта).
-    /// Раньше это были <c>static readonly</c> поля формы; с настраиваемым видом они стали
-    /// сменяемыми, поэтому собраны в один объект с явным временем жизни.
+    /// Drawing resources for the bar and the overlay that depend on settings (theme + font
+    /// scale). These used to be <c>static readonly</c> fields on the form; once the look
+    /// became configurable they became swappable, so they are gathered into a single object
+    /// with an explicit lifetime.
     /// </summary>
     internal sealed class BarTheme : IDisposable
     {
-        // Базовые кегли (при FontScale = 1.0) — те же, что были захардкожены раньше.
+        // Base point sizes (at FontScale = 1.0) — the same ones that used to be hard-coded.
         private const float BaseMainFontSize = 9f;
         private const float BaseSmallFontSize = 7.5f;
         private const float BaseTitleFontSize = 8.5f;
@@ -20,14 +21,14 @@ namespace SystemBarIndicator
 
         private readonly List<IDisposable> _owned = new();
 
-        // --- Бар ---
+        // --- Bar ---
         public Font MainFont { get; private set; } = null!;
         public Font SmallFont { get; private set; } = null!;
         public Brush Dim { get; private set; } = null!;
         public Pen Separator { get; private set; } = null!;
         public Brush Track { get; private set; } = null!;
 
-        // --- Оверлей с графиками ---
+        // --- Graph overlay ---
         public Font TitleFont { get; private set; } = null!;
         public Font ValueFont { get; private set; } = null!;
         public Brush TitleBrush { get; private set; } = null!;
@@ -37,16 +38,16 @@ namespace SystemBarIndicator
         public Color Background { get; private set; }
         public Color OverlayBackground { get; private set; }
 
-        // Цвета уровней нагрузки и потоков данных читаемы на любом фоне и от темы не зависят,
-        // поэтому создаются один раз на всё время работы приложения.
+        // Load-level and throughput colours are readable on any background and do not depend
+        // on the theme, so they are created once for the lifetime of the application.
         public static readonly Brush Red = new SolidBrush(Color.FromArgb(244, 67, 54));
         public static readonly Brush Orange = new SolidBrush(Color.FromArgb(255, 152, 0));
         public static readonly Brush Yellow = new SolidBrush(Color.FromArgb(255, 193, 7));
         public static readonly Brush Green = new SolidBrush(Color.FromArgb(76, 175, 80));
-        // Цвета сети совпадают с графиками в оверлее (Net DL / Net UL).
+        // The network colours match the overlay charts (Net DL / Net UL).
         public static readonly Brush NetDown = new SolidBrush(Color.FromArgb(237, 137, 54));
         public static readonly Brush NetUp = new SolidBrush(Color.FromArgb(38, 198, 218));
-        // Диск — отдельная цветовая пара (фиолетовый/розовый), чтобы не путать с сетью.
+        // Disk gets its own colour pair (purple/pink) so it is not confused with network.
         public static readonly Brush DiskRead = new SolidBrush(Color.FromArgb(171, 71, 188));
         public static readonly Brush DiskWrite = new SolidBrush(Color.FromArgb(236, 64, 122));
 
@@ -55,8 +56,8 @@ namespace SystemBarIndicator
         }
 
         /// <summary>
-        /// Собирает тему по настройкам. При сбое посреди создания уже выделенные
-        /// GDI+-объекты освобождаются — иначе они бы утекли.
+        /// Builds the theme from the settings. If construction fails partway through, the
+        /// GDI+ objects allocated so far are disposed — otherwise they would leak.
         /// </summary>
         public static BarTheme Create(AppSettings settings)
         {
@@ -96,7 +97,7 @@ namespace SystemBarIndicator
                         ApplyDarkPalette();
                     else
                         ApplyLightPalette();
-                    // Оверлей повторяет пользовательский фон, но чуть темнее/светлее — см. Shift.
+                    // The overlay echoes the user's background, slightly darker/lighter — see Shift.
                     OverlayBackground = Shift(Background, ColorCodec.IsDark(argb) ? -6 : 10);
                     break;
 
@@ -135,7 +136,7 @@ namespace SystemBarIndicator
             Math.Clamp(color.G + delta, 0, 255),
             Math.Clamp(color.B + delta, 0, 255));
 
-        // Регистрирует созданный ресурс, чтобы Dispose освободил его даже при сбое сборки темы.
+        // Registers a created resource so Dispose releases it even if building the theme fails.
         private T Own<T>(T resource) where T : IDisposable
         {
             _owned.Add(resource);

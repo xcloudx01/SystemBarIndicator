@@ -14,8 +14,8 @@ namespace SystemBarIndicator
         private const int ChartHeight = 72;
         private const int OuterPadding = 8;
         private const int Gap = 4;
-        // Ширину оверлей берёт у бара, а тот может стать совсем узким, если выключить
-        // большинство секций, — графики в такой полоске нечитаемы.
+        // The overlay takes its width from the bar, which can become very narrow when most
+        // sections are turned off — charts in such a sliver would be unreadable.
         private const int MinWidth = 320;
 
         private readonly DataHistory _history;
@@ -34,10 +34,10 @@ namespace SystemBarIndicator
             public required Func<SensorData, string> FormatValue;
             public float MaxDefault;
             public bool ShowOnlyIfPositive;
-            /// <summary>Показана ли секция в настройках — график следует за составом бара.</summary>
+            /// <summary>Whether the section is enabled in settings — charts follow the bar.</summary>
             public required Func<AppSettings, bool> IsEnabled;
 
-            // Цветные ресурсы графика — создаются один раз, освобождаются в OnFormClosed.
+            // Per-chart coloured resources — created once, released in OnFormClosed.
             public SolidBrush LineBrush = null!;
             public Pen LinePen = null!;
             public Pen GlowPen = null!;
@@ -84,19 +84,19 @@ namespace SystemBarIndicator
 
             UpdateSize();
 
-            // Один таймер: пересчёт размера/позиции + перерисовка. Прежний таймер
-            // позиционирования (100 мс) убран — окно следует за панелью через
-            // событие LocationChanged родителя, а здесь обновляемся раз в 500 мс.
+            // One timer: recompute size/position plus repaint. The old 100 ms positioning
+            // timer is gone — the window follows the bar through the parent's
+            // LocationChanged event, and this one refreshes every 500 ms.
             _updateTimer = new Timer { Interval = 500 };
             _updateTimer.Tick += (s, e) => { PositionAboveParent(); this.Invalidate(); };
             _updateTimer.Start();
         }
 
-        /// <summary>Оверлей чуть плотнее бара, но следует за его прозрачностью.</summary>
+        /// <summary>The overlay is slightly more solid than the bar, but tracks its opacity.</summary>
         private static double OverlayOpacity(AppSettings settings) =>
             Math.Min(1.0, settings.Opacity + 0.03);
 
-        /// <summary>Подхватывает смену темы и настроек без пересоздания окна.</summary>
+        /// <summary>Picks up theme and settings changes without recreating the window.</summary>
         public void ApplyTheme(BarTheme theme, AppSettings settings)
         {
             _theme = theme;
@@ -145,8 +145,9 @@ namespace SystemBarIndicator
         {
             UpdateSize();
 
-            // Экран берём по фактическому положению бара: на мониторе выше или левее
-            // основного координаты отрицательны, и клэмп по нулю был бы неверен.
+            // The screen is chosen from the bar's actual position: on a monitor above or to
+            // the left of the primary one coordinates are negative, so clamping at zero
+            // would be wrong.
             var screen = Screen.FromRectangle(_parentForm.Bounds).WorkingArea;
 
             int x = _parentForm.Left;
@@ -176,7 +177,7 @@ namespace SystemBarIndicator
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-            var data = _history.GetPoints(); // один снимок истории на кадр
+            var data = _history.GetPoints(); // a single history snapshot per frame
             int y = OuterPadding;
 
             foreach (var chart in _charts)
@@ -313,8 +314,8 @@ namespace SystemBarIndicator
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
-            // Освобождаем ресурсы рисования только после уничтожения окна: между
-            // FormClosing и FormClosed ещё может прийти WM_PAINT.
+            // Drawing resources are released only after the window is destroyed: a WM_PAINT
+            // can still arrive between FormClosing and FormClosed.
             _updateTimer.Dispose();
 
             foreach (var c in _charts)

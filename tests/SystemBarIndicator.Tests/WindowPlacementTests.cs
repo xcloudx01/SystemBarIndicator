@@ -27,28 +27,28 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void IsUsable_FalseWhenSecondScreenDisconnected()
         {
-            // Позиция сохранялась на втором мониторе, а он отключён — восстанавливать нельзя.
+            // The position was saved on a second monitor that is now gone — do not restore it.
             Assert.False(WindowPlacement.IsUsable(new Rectangle(3300, 1040, 500, 32), OneScreen));
         }
 
         [Fact]
         public void IsUsable_FalseWhenBarelyPeeking()
         {
-            // Видно 5 px по горизонтали — ухватиться мышью нереально.
+            // Only 5 px visible horizontally — impossible to grab with the mouse.
             Assert.False(WindowPlacement.IsUsable(new Rectangle(-495, 500, 500, 32), OneScreen));
         }
 
         [Fact]
         public void IsUsable_TrueAtVisibilityThreshold()
         {
-            // Ровно MinVisible пикселей у левого края экрана.
+            // Exactly MinVisible pixels at the left edge of the screen.
             Assert.True(WindowPlacement.IsUsable(new Rectangle(-500 + WindowPlacement.MinVisible, 500, 500, 32), OneScreen));
         }
 
         [Fact]
         public void IsUsable_FalseWhenMostlyBelowScreen()
         {
-            // По вертикали видно меньше половины высоты бара.
+            // Less than half the bar's height is visible vertically.
             Assert.False(WindowPlacement.IsUsable(new Rectangle(100, 1070, 500, 32), OneScreen));
         }
 
@@ -79,7 +79,7 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void ClampToScreens_UsesScreenWithLargestOverlap()
         {
-            // Бар преимущественно на втором мониторе — вдвигаем именно в него.
+            // The bar mostly overlaps the second monitor — push it into that one.
             var clamped = WindowPlacement.ClampToScreens(new Rectangle(3600, 1070, 500, 32), TwoScreens);
 
             Assert.True(clamped.X >= Secondary.Left);
@@ -114,7 +114,7 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void ClampToScreens_HandlesNegativeCoordinateScreen()
         {
-            // Монитор слева от основного: координаты отрицательные.
+            // A monitor to the left of the primary one: negative coordinates.
             var screens = new[] { Primary, new Rectangle(-1920, 0, 1920, 1080) };
 
             var clamped = WindowPlacement.ClampToScreens(new Rectangle(-2100, 500, 500, 32), screens);

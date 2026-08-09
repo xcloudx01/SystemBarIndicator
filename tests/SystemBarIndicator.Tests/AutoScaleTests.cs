@@ -26,7 +26,7 @@ namespace SystemBarIndicator.Tests
         {
             var scale = new AutoScale(64f, 0.97f);
             scale.Update(5000f);
-            Assert.Equal(1f, scale.Fraction(5000f)); // пик = полная шкала
+            Assert.Equal(1f, scale.Fraction(5000f)); // the peak is the full scale
             Assert.InRange(scale.Fraction(2500f), 0.49f, 0.51f);
         }
 
@@ -34,13 +34,13 @@ namespace SystemBarIndicator.Tests
         public void DecaysSlowlyWhenActivityDrops_ButNotBelowFloor()
         {
             var scale = new AutoScale(64f, 0.9f);
-            scale.Update(1000f);          // шкала = 1000
+            scale.Update(1000f);          // scale = 1000
             for (int i = 0; i < 5; i++)
-                scale.Update(0f);          // затухание
-            Assert.True(scale.Value < 1000f, "шкала должна уменьшаться");
+                scale.Update(0f);          // decay
+            Assert.True(scale.Value < 1000f, "the scale should shrink");
             for (int i = 0; i < 200; i++)
                 scale.Update(0f);
-            Assert.Equal(64f, scale.Value); // но не ниже пола
+            Assert.Equal(64f, scale.Value); // but never below the floor
         }
 
         [Fact]
@@ -63,7 +63,7 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void Decay_CanBeChangedOnTheFly_KeepingCurrentScale()
         {
-            // Смена интервала опроса меняет затухание, но не текущую шкалу.
+            // Changing the poll interval changes the decay, but not the current scale.
             var scale = new AutoScale(64f, 0.9f);
             scale.Update(1000f);
 

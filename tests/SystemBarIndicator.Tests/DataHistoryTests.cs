@@ -37,7 +37,7 @@ namespace SystemBarIndicator.Tests
 
             Assert.Equal(3, history.Count);
             var points = history.GetPoints();
-            Assert.Equal(3, points[0].CpuUsage); // 1 и 2 вытеснены
+            Assert.Equal(3, points[0].CpuUsage); // 1 and 2 were evicted
             Assert.Equal(4, points[1].CpuUsage);
             Assert.Equal(5, points[2].CpuUsage);
         }
@@ -51,7 +51,7 @@ namespace SystemBarIndicator.Tests
             var snapshot = history.GetPoints();
             history.Add(Point(2));
 
-            Assert.Single(snapshot); // снимок не меняется после новых Add
+            Assert.Single(snapshot); // the snapshot does not change when more points are added
             Assert.Equal(2, history.Count);
         }
 

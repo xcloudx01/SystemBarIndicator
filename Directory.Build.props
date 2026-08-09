@@ -1,6 +1,6 @@
 <Project>
 
-  <!-- Общие настройки для всех проектов решения. -->
+  <!-- Settings shared by every project in the solution. -->
   <PropertyGroup>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>

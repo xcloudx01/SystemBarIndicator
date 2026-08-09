@@ -13,120 +13,129 @@ WinForms + GDI+ on .NET 10. Hardware temperatures via LibreHardwareMonitorLib.
 ```
 SystemBarIndicator.sln
 ├── src/
-│   ├── SystemBarIndicator.Core/   # net10.0 — платформонезависимое ядро (без WinForms)
+│   ├── SystemBarIndicator.Core/   # net10.0 — platform-independent core (no WinForms)
 │   │   ├── Models/                #   SensorData, DataPoint, DataHistory
-│   │   ├── Monitoring/            #   LoadLevel + пороги (LoadLevels)
+│   │   ├── Monitoring/            #   LoadLevel + thresholds (LoadLevels)
 │   │   ├── Configuration/         #   AppSettings, SettingsStore, WindowPlacement, ColorCodec
 │   │   └── Util/                  #   Formatting, Ema, AutoScale, SmoothingRates
-│   └── SystemBarIndicator.App/    # net10.0-windows — WinForms UI + Windows-сенсоры (WinExe)
-│       ├── Program.cs             #   MainForm: бар на панели задач, отрисовка, трей
-│       ├── GraphOverlay.cs        #   всплывающие графики
-│       ├── SettingsForm.cs        #   окно настроек внешнего вида
-│       ├── BarTheme.cs            #   сменяемые GDI+ ресурсы (тема + масштаб шрифта)
+│   └── SystemBarIndicator.App/    # net10.0-windows — WinForms UI + Windows sensors (WinExe)
+│       ├── Program.cs             #   MainForm: the taskbar bar, drawing, tray
+│       ├── GraphOverlay.cs        #   pop-up graphs
+│       ├── SettingsForm.cs        #   appearance settings window
+│       ├── BarTheme.cs            #   swappable GDI+ resources (theme + font scale)
 │       ├── Sensors/               #   Cpu/Ram/Disk/Network/Hardware (PerfCounter, P/Invoke, LHM)
-│       └── Logging/Logger.cs      #   файловый логгер
+│       └── Logging/Logger.cs      #   file logger
 └── tests/
-    └── SystemBarIndicator.Tests/  # net10.0 — xUnit, ссылается только на Core
+    └── SystemBarIndicator.Tests/  # net10.0 — xUnit, references Core only
 ```
 
 ## Commands
 
 ```bash
-dotnet build -c Release        # сборка (TreatWarningsAsErrors — падает на предупреждениях)
-dotnet test  -c Release        # юнит-тесты (xUnit)
-dotnet run --project src/SystemBarIndicator.App   # запуск приложения
+dotnet build -c Release        # build (TreatWarningsAsErrors — fails on any warning)
+dotnet test  -c Release        # unit tests (xUnit)
+dotnet run --project src/SystemBarIndicator.App   # run the app
 ```
 
 ## Architecture notes
 
-- **Core vs App.** Любая логика без зависимости от WinForms/железа живёт в `Core` и
-  покрывается тестами. UI и доступ к ОС (P/Invoke, PerformanceCounter, LHM) — в `App`.
-  Новые тестируемые правила (форматирование, пороги, агрегации) добавляйте в `Core`.
-- **Опрос данных.** `MainForm._timer` (1 c) обновляет единый снимок `SensorData _current`
-  через классы `Sensors`, затем кладёт точку в `DataHistory` (кольцевой буфер на 120 точек).
-  `HardwareSensor.Update()` обязателен раз за тик — без него LHM отдаёт пустые значения.
-- **Температуры и PawnIO.** LHM 0.9.6 читает датчики CPU через подписанный драйвер ядра
-  **PawnIO** (вместо уязвимого WinRing0, который помечает Microsoft Defender). PawnIO ставится
-  отдельно (pawnio.eu); без него температура CPU недоступна, но уязвимый драйвер не грузится.
-- **Один экземпляр.** `Program.Main` удерживает именованный `Mutex`
-  (`Local\SystemBarIndicator_SingleInstance`); повторный запуск сразу завершается.
-- **Always-on-top.** Удержание поверх — через модификацию z-order в `WM_WINDOWPOSCHANGING`
-  (без рекурсивного `SetWindowPos`); таймер 1 c — лишь страховка.
-- **Позиционирование.** `SHAppBarMessage(ABM_GETTASKBARPOS)` определяет прямоугольник и край
-  панели задач; `MainForm.BarEdge` управляет тем, всплывает оверлей над баром или под ним
-  (после перетаскивания пересчитывается по фактическому положению — `UpdateBarEdgeFromPosition`).
-  Ширина окна не фиксирована: после обмера контента в `OnPaint` она подгоняется
-  (`ApplyPendingBarWidth`, отложенно через `BeginInvoke` с коалесцированием), правый край
-  при этом остаётся на месте; 520 px в конструкторе — лишь стартовая оценка.
-- **Сохранение положения.** В настройках лежит **правый край** (`BarRight`), а не `Left`:
-  ширина подгоняется под контент уже после первого кадра, а подгонка удерживает именно
-  правый край — иначе бар при каждом запуске уползал бы. Позиция пишется **только** когда
-  пользователь сам перетащил бар (`OnResizeEnd` + сравнение с сохранённой парой): если писать
-  её всегда, бар навсегда перестанет следовать за панелью задач. `Reset Position` обнуляет
-  `BarRight`/`BarTop`. Валидность точки проверяет `WindowPlacement` (Core, покрыт тестами):
-  недостижимая позиция вдвигается в экран, а исправленная — сразу сохраняется.
-  Смену конфигурации мониторов ловим сообщением `WM_DISPLAYCHANGE` в `WndProc`
-  (а не `SystemEvents`: то приходит не в UI-поток и требует отписки).
-- **Клик по бару.** Окно отдаёт `HTCAPTION` на любой hit-test, поэтому нажатие система сразу
-  превращает в `WM_SYSCOMMAND`/`SC_MOVE`; клиентские `WM_LBUTTONDOWN/UP` не приходят вовсе,
-  `WM_NCLBUTTONUP` съедается, а `WM_ENTERSIZEMOVE` на клике **без движения** не приходит.
-  Поэтому жест разбирается в самом `SC_MOVE`: `base.WndProc` возвращает управление после
-  отпускания кнопки, и если `Location` не изменился — это клик (открыть графики).
-- **Рисование.** GDI+ ресурсы живут в `BarTheme` (шрифты и цвета, зависящие от настроек)
-  и пересоздаются при смене темы/масштаба; неизменные цвета уровней нагрузки — `static`,
-  цветные ресурсы графиков — по графику. История берётся одним снимком на кадр.
-  Числовые значения (проценты, температуры) рисуются в слотах фиксированной ширины
-  по шаблонам «100%»/«999C» с прижатием вправо (`DrawValueSlot`), диапазон значений гарантируют
-  `Formatting.FormatPercent/FormatTemperature` (Core, покрыты тестами); секции CPU-temp/GPU
-  показываются по «защёлкам» доступности датчика — компоновка не прыгает ни при смене
-  числа разрядов, ни при кратковременном сбое датчика.
-  **Ни ширину слота, ни высоту строки нельзя кэшировать между кадрами:** при PerMonitorV2
-  `MeasureString` возвращает пиксели текущего монитора, поэтому и то и другое меряется
-  в `OnPaint`. Разделитель рисуется **перед** секцией, если что-то уже нарисовано —
-  иначе при выключенных секциях остались бы висящие палки.
-- **Диск/сеть в полоске.** Показаны парой баров (▼ чтение/загрузка, ▲ запись/отдача)
-  фиксированной ширины. Рваные мгновенные значения сглаживаются `Ema`, полная шкала —
-  адаптивный `AutoScale` по недавнему пику (оба класса в `Core`, покрыты тестами).
-  Общий метод отрисовки — `DrawDualBars`. Базовые коэффициенты (alpha 0.4, decay 0.97)
-  откалиброваны под тик в 1 c; при смене интервала опроса они пересчитываются
-  (`SmoothingRates`, Core) — иначе при 0.5 c индикаторы стали бы вдвое инертнее, а при 5 c рваными.
-- **Настройки.** `%LOCALAPPDATA%\SystemBarIndicator\settings.json` (рядом с `app.log`;
-  задание запускается от того же пользователя, поэтому путь не меняется от повышения прав).
-  Загрузка никогда не бросает: битый JSON, `null`-документ или отсутствие файла дают дефолты,
-  причина уходит в лог. Запись **атомарная** (`.tmp` + `File.Move(overwrite)`) и всегда
-  сохраняет `Normalized()` — NaN/бесконечность в JSON недопустимы. `Normalized()` также
-  чинит `null` в ненулевых строковых свойствах: аннотации nullable на десериализацию
-  не влияют (`RespectNullableAnnotations` по умолчанию выключен).
-  Сериализация — source-generated `JsonSerializerContext`: не обязательна сейчас
-  (trim/AOT-анализаторы в проекте не включены и предупреждений нет), но останется
-  корректной, если публикацию когда-нибудь переведут на trimming.
-  Флаги секций — **автосвойства, а не поля**: поля `System.Text.Json` молча игнорирует.
-  Запись на диск отложена (`_saveTimer`, 1.5 c) — перетаскивание и ползунки не должны
-  устраивать шторм обращений; окно настроек применяет изменения сразу, а тему пересоздаёт
-  только когда изменились влияющие на неё поля (`AppSettings.DiffersInAppearance`).
-  `MainForm.ApplySettings` намеренно **игнорирует** `BarRight`/`BarTop` из входящего снимка:
-  иначе открытое окно настроек затирало бы позицию своей устаревшей копией.
+- **Core vs App.** Any logic that does not depend on WinForms or hardware lives in `Core`
+  and is covered by tests. UI and OS access (P/Invoke, PerformanceCounter, LHM) live in
+  `App`. Put new testable rules (formatting, thresholds, aggregation) in `Core`.
+- **Polling.** `MainForm._timer` (1 s) refreshes a single `SensorData _current` snapshot
+  through the `Sensors` classes, then pushes a point into `DataHistory` (a 120-point ring
+  buffer). `HardwareSensor.Update()` must be called once per tick — without it LHM returns
+  empty values.
+- **Temperatures and PawnIO.** LHM 0.9.6 reads CPU sensors through the signed **PawnIO**
+  kernel driver (instead of the vulnerable WinRing0, which Microsoft Defender flags).
+  PawnIO is installed separately (pawnio.eu); without it CPU temperature is unavailable,
+  but the vulnerable driver is not loaded either.
+- **Single instance.** `Program.Main` holds a named `Mutex`
+  (`Local\SystemBarIndicator_SingleInstance`); a second launch exits immediately.
+- **Always-on-top.** Kept on top by modifying the z-order in `WM_WINDOWPOSCHANGING`
+  (no recursive `SetWindowPos`); the 1 s timer is only a safety net.
+- **Positioning.** `SHAppBarMessage(ABM_GETTASKBARPOS)` determines the taskbar rectangle
+  and edge; `MainForm.BarEdge` controls whether the overlay pops up above or below the bar
+  (after a drag it is recomputed from the actual position — `UpdateBarEdgeFromPosition`).
+  The window width is not fixed: after the content is measured in `OnPaint` it is adjusted
+  (`ApplyPendingBarWidth`, deferred via `BeginInvoke` with coalescing) while the right edge
+  stays put; the 520 px in the constructor is only a starting estimate.
+- **Saved position.** Settings store the **right edge** (`BarRight`), not `Left`: the width
+  is fitted to the content only after the first frame, and that fit holds the right edge —
+  otherwise the bar would creep away on every start. The position is written **only** when
+  the user dragged the bar themselves (`OnResizeEnd` + comparison against the saved pair):
+  writing it unconditionally would permanently stop the bar from following the taskbar.
+  `Reset Position` clears `BarRight`/`BarTop`. Point validity is checked by
+  `WindowPlacement` (Core, covered by tests): an unreachable position is pushed back into
+  the screen, and the corrected value is saved immediately. Monitor reconfiguration is
+  caught via the `WM_DISPLAYCHANGE` message in `WndProc` (not `SystemEvents`: that arrives
+  off the UI thread and requires unsubscribing).
+- **Clicking the bar.** The window returns `HTCAPTION` for any hit-test, so the system turns
+  a press straight into `WM_SYSCOMMAND`/`SC_MOVE`; client-area `WM_LBUTTONDOWN/UP` never
+  arrive, `WM_NCLBUTTONUP` is swallowed, and `WM_ENTERSIZEMOVE` does not arrive at all for a
+  click **without** movement. The gesture is therefore decoded inside `SC_MOVE` itself:
+  `base.WndProc` returns once the button is released, and if `Location` did not change it
+  was a click (open the graphs).
+- **Drawing.** GDI+ resources live in `BarTheme` (fonts and colours that depend on settings)
+  and are recreated when the theme or scale changes; the fixed load-level colours are
+  `static`, and per-graph coloured resources belong to their graph. History is taken as a
+  single snapshot per frame. Numeric values (percentages, temperatures) are drawn in
+  fixed-width slots using the templates "100%"/"999C", right-aligned (`DrawValueSlot`); the
+  value range is guaranteed by `Formatting.FormatPercent/FormatTemperature` (Core, covered
+  by tests). The CPU-temp and GPU sections are shown through availability latches, so the
+  layout jumps neither when the digit count changes nor during a brief sensor dropout.
+  **Neither the slot width nor the line height may be cached between frames:** under
+  PerMonitorV2, `MeasureString` returns pixels for the current monitor, so both are measured
+  in `OnPaint`. The separator is drawn **before** a section if anything has been drawn
+  already — otherwise disabled sections would leave dangling bars.
+- **Disk/network in the bar.** Shown as a pair of fixed-width bars (▼ read/download,
+  ▲ write/upload). Jagged instantaneous values are smoothed with `Ema`, and the full-scale
+  value is an adaptive `AutoScale` over the recent peak (both classes in `Core`, covered by
+  tests). The shared drawing method is `DrawDualBars`. The base coefficients (alpha 0.4,
+  decay 0.97) are calibrated for a 1 s tick; when the poll interval changes they are
+  recomputed (`SmoothingRates`, Core) — otherwise at 0.5 s the indicators would be twice as
+  sluggish, and at 5 s they would be jagged.
+- **Settings.** `%LOCALAPPDATA%\SystemBarIndicator\settings.json` (next to `app.log`; the
+  scheduled task runs as the same user, so the path does not change with elevation).
+  Loading never throws: corrupt JSON, a `null` document or a missing file all yield
+  defaults, with the reason logged. Writing is **atomic** (`.tmp` + `File.Move(overwrite)`)
+  and always persists `Normalized()` — NaN/infinity are not valid JSON. `Normalized()` also
+  repairs `null` in non-nullable string properties: nullable annotations do not affect
+  deserialization (`RespectNullableAnnotations` is off by default). Serialization uses a
+  source-generated `JsonSerializerContext`: not strictly required today (trim/AOT analyzers
+  are not enabled and there are no warnings), but it stays correct if publishing is ever
+  switched to trimming. Section flags are **auto-properties, not fields**:
+  `System.Text.Json` silently ignores fields. Disk writes are deferred (`_saveTimer`,
+  1.5 s) — dragging and sliders must not cause a storm of writes; the settings window
+  applies changes immediately but recreates the theme only when fields that affect it
+  changed (`AppSettings.DiffersInAppearance`). `MainForm.ApplySettings` deliberately
+  **ignores** `BarRight`/`BarTop` from the incoming snapshot: otherwise an open settings
+  window would overwrite the position with its own stale copy.
 
 ## Conventions
 
-- `nullable` включён везде; `TreatWarningsAsErrors=true` (см. `Directory.Build.props`).
-- Сборка должна оставаться без предупреждений.
-- Логи приложения: `%LOCALAPPDATA%\SystemBarIndicator\app.log`.
-- `ROADMAP.md` / `SUGGESTIONS.md` — опережающие планы, а не описание текущего кода.
-- **Развёртывание для рабочего стола.** `LibreHardwareMonitorLib` 0.9.6 — RID-split пакет
-  (реальные сборки в `runtimes/<rid>/lib/<tfm>/`). Чтобы получить чистую плоскую раскладку
-  одной версии, публикуйте с RID в отдельную папку (вне OneDrive):
-  `dotnet publish src/SystemBarIndicator.App -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -o <папка>`.
-  Обычный `bin` лежит в OneDrive и его содержимое может «уплывать» — на него не опираемся.
-  Воспроизводимая установка целиком — `deploy/Install.ps1` (см. `deploy/README.md`).
-- **Запуск от администратора без UAC.** Приложению нужны права админа (драйвер PawnIO),
-  но манифест — `asInvoker`. Ярлык с флагом «запуск от администратора» спрашивал бы UAC
-  каждый раз, поэтому используется **назначенное задание** (RunLevel=Highest), а ярлык
-  запускает тихий `launch.vbs` → `schtasks /run` (запуск своего задания повышения не
-  требует). Регистрация задания — единственный шаг с правами админа (`Install.ps1`
-  самоповышается на нём).
-- **Иконка.** Многоразмерная `src/SystemBarIndicator.App/appicon.ico` вшита и в exe
-  (`ApplicationIcon`), и как `EmbeddedResource` — для трея/окна грузится в `LoadAppIcon()`.
-- **Скрипты `.ps1`, перезапускаемые с повышением, держим в ASCII.** Кириллица в `.ps1`
-  (UTF-8 без BOM), перечитанная `powershell.exe` как ANSI-кодировка, портится и однажды
-  сломала задание (регистрация в папке-кракозябре). Тексты для elevated-перезапуска — ASCII.
+- `nullable` is enabled everywhere; `TreatWarningsAsErrors=true` (see `Directory.Build.props`).
+- The build must stay warning-free.
+- English for code, comments, documentation and commit messages.
+- Application log: `%LOCALAPPDATA%\SystemBarIndicator\app.log`.
+- `ROADMAP.md` separates what is implemented from what is merely an idea — keep that
+  distinction accurate when it changes.
+- **Desktop deployment.** `LibreHardwareMonitorLib` 0.9.6 is a RID-split package (the real
+  assemblies live in `runtimes/<rid>/lib/<tfm>/`). To get a clean flat layout of a single
+  version, publish with a RID into a separate folder (outside OneDrive):
+  `dotnet publish src/SystemBarIndicator.App -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -o <folder>`.
+  The regular `bin` sits in OneDrive and its contents can drift — do not rely on it.
+  The full reproducible install is `deploy/Install.ps1` (see `deploy/README.md`).
+- **Running as administrator without UAC.** The app needs admin rights (the PawnIO driver),
+  but the manifest is `asInvoker`. A shortcut with the "run as administrator" flag would
+  prompt for UAC every time, so a **scheduled task** is used instead (RunLevel=Highest) and
+  the shortcut launches a silent `launch.vbs` → `schtasks /run` (triggering your own task
+  does not require elevation). Registering the task is the only step needing admin rights
+  (`Install.ps1` self-elevates for it).
+- **Icon.** The multi-size `src/SystemBarIndicator.App/appicon.ico` is embedded both in the
+  exe (`ApplicationIcon`) and as an `EmbeddedResource` — `LoadAppIcon()` loads it for the
+  tray and the window.
+- **Keep `.ps1` scripts that self-elevate ASCII-only.** Non-ASCII text in a `.ps1` (UTF-8
+  without a BOM) re-read by `powershell.exe` under the ANSI code page gets corrupted, and
+  once broke the scheduled task (registered under a mojibake folder). Text used for
+  elevated relaunch stays ASCII.

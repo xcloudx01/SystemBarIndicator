@@ -5,18 +5,18 @@ using System.Drawing;
 namespace SystemBarIndicator.Configuration
 {
     /// <summary>
-    /// Проверка и починка сохранённого положения окна: монитор мог быть отключён,
-    /// а разрешение — измениться, и тогда бар оказался бы за пределами видимой области.
-    /// Логика чистая (System.Drawing.Primitives, без WinForms) — покрыта тестами.
+    /// Validates and repairs a saved window position: a monitor may have been unplugged or
+    /// the resolution changed, which would leave the bar outside the visible area.
+    /// The logic is pure (System.Drawing.Primitives, no WinForms) and is covered by tests.
     /// </summary>
     public static class WindowPlacement
     {
-        /// <summary>Сколько пикселей окна должно остаться видимым, чтобы за него можно было ухватиться.</summary>
+        /// <summary>How many pixels of the window must stay visible for it to be grabbable.</summary>
         public const int MinVisible = 24;
 
         /// <summary>
-        /// Виден ли бар настолько, чтобы им можно было пользоваться: хотя бы на одном экране
-        /// пересечение шире <paramref name="minVisible"/> и покрывает половину высоты бара.
+        /// Whether the bar is visible enough to be usable: on at least one screen the
+        /// intersection is wider than <paramref name="minVisible"/> and covers half its height.
         /// </summary>
         public static bool IsUsable(Rectangle bar, IReadOnlyList<Rectangle> screens, int minVisible = MinVisible)
         {
@@ -36,8 +36,8 @@ namespace SystemBarIndicator.Configuration
         }
 
         /// <summary>
-        /// Вдвигает бар целиком в тот экран, с которым он пересекается сильнее всего
-        /// (если не пересекается ни с одним — в первый). Размер не меняется.
+        /// Moves the bar fully into the screen it overlaps most (or the first screen if it
+        /// overlaps none). The size is unchanged.
         /// </summary>
         public static Rectangle ClampToScreens(Rectangle bar, IReadOnlyList<Rectangle> screens)
         {
@@ -60,7 +60,7 @@ namespace SystemBarIndicator.Configuration
             return ClampTo(bar, target);
         }
 
-        /// <summary>Вдвигает прямоугольник внутрь заданного экрана; при нехватке места прижимает к левому/верхнему краю.</summary>
+        /// <summary>Moves a rectangle inside the given screen; if it does not fit, pins it to the left/top edge.</summary>
         public static Rectangle ClampTo(Rectangle bar, Rectangle screen)
         {
             int x = bar.X;

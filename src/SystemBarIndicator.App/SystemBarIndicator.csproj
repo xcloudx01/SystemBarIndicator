@@ -15,7 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Иконка приложения: и Win32-значок exe (ApplicationIcon выше), и ресурс для трея/окна. -->
+    <!-- App icon: both the exe's Win32 icon (ApplicationIcon above) and a resource for the tray/window. -->
     <EmbeddedResource Include="appicon.ico" />
   </ItemGroup>
 

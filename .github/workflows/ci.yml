@@ -6,14 +6,19 @@ on:
   pull_request:
   workflow_dispatch:
 
+# The workflow only builds and tests: no write access to the repository is needed.
+# Pinned explicitly so a wider repository default can never widen this token.
+permissions:
+  contents: read
+
 jobs:
   build-test:
     name: Build & Test
     runs-on: windows-latest
 
     steps:
-      # Мажоры v7/v6 работают на node24: v4 заявлены под node20, который на runner'ах
-      # объявлен устаревшим и принудительно подменяется (предупреждение в каждом прогоне).
+      # The v7/v6 majors run on node24: v4 targets node20, which the runners have deprecated
+      # and force-substitute (producing a warning on every run).
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -25,7 +30,7 @@ jobs:
       - name: Restore
         run: dotnet restore
 
-      # TreatWarningsAsErrors задан в Directory.Build.props — сборка падает на любом предупреждении.
+      # TreatWarningsAsErrors is set in Directory.Build.props — the build fails on any warning.
       - name: Build (Release)
         run: dotnet build --configuration Release --no-restore
 

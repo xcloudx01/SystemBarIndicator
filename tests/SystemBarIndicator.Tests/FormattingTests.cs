@@ -22,7 +22,7 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void FormatSpeed_UsesInvariantDecimalPoint()
         {
-            // Не зависит от текущей культуры — всегда точка, а не запятая.
+            // Independent of the current culture — always a dot, never a comma.
             Assert.Equal("1.5MB/s", Formatting.FormatSpeed(1536f));
         }
 
@@ -31,8 +31,8 @@ namespace SystemBarIndicator.Tests
         [InlineData(7.4f, "7%")]
         [InlineData(99.9f, "100%")]
         [InlineData(100f, "100%")]
-        [InlineData(150f, "100%")]          // clamp сверху: не шире шаблона слота "100%"
-        [InlineData(-5f, "0%")]             // clamp снизу
+        [InlineData(150f, "100%")]          // clamped above: never wider than the "100%" slot
+        [InlineData(-5f, "0%")]             // clamped below
         [InlineData(float.NaN, "0%")]
         [InlineData(float.PositiveInfinity, "100%")]
         public void FormatPercent_ClampsAndFormats(float value, string expected)
@@ -44,8 +44,8 @@ namespace SystemBarIndicator.Tests
         [InlineData(0f, "0C")]
         [InlineData(45.6f, "46C")]
         [InlineData(105f, "105C")]
-        [InlineData(1500f, "999C")]         // clamp сверху: не шире шаблона слота "999C"
-        [InlineData(-10f, "0C")]            // clamp снизу
+        [InlineData(1500f, "999C")]         // clamped above: never wider than the "999C" slot
+        [InlineData(-10f, "0C")]            // clamped below
         [InlineData(float.NaN, "0C")]
         public void FormatTemperature_ClampsAndFormats(float value, string expected)
         {
@@ -56,8 +56,8 @@ namespace SystemBarIndicator.Tests
         [InlineData(0f, "32F")]
         [InlineData(100f, "212F")]
         [InlineData(45.6f, "114F")]         // 45.6C = 114.08F
-        [InlineData(600f, "999F")]          // clamp сверху уже ПОСЛЕ перевода
-        [InlineData(-10f, "32F")]           // clamp снизу до 0C, затем перевод
+        [InlineData(600f, "999F")]          // clamped above AFTER the conversion
+        [InlineData(-10f, "32F")]           // clamped below to 0C, then converted
         [InlineData(float.NaN, "32F")]
         public void FormatTemperature_Fahrenheit_ConvertsAndClamps(float celsius, string expected)
         {
@@ -73,7 +73,7 @@ namespace SystemBarIndicator.Tests
         [Fact]
         public void TemperatureSlotTemplate_FitsAnyFormattedValue()
         {
-            // Шаблон слота должен быть не короче самой длинной возможной строки.
+            // The slot template must be at least as wide as the longest possible string.
             foreach (bool fahrenheit in new[] { false, true })
             {
                 string template = Formatting.TemperatureSlotTemplate(fahrenheit);

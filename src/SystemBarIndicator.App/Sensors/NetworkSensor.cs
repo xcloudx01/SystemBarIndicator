@@ -6,11 +6,11 @@ using System.Net.NetworkInformation;
 namespace SystemBarIndicator.Sensors
 {
     /// <summary>
-    /// Измеряет скорость сети по дельте счётчиков байт интерфейсов.
-    /// Используется <see cref="IPInterfaceStatistics"/> вместо PerformanceCounter:
-    /// имена экземпляров perf-счётчиков "Network Interface" формируются из описания
-    /// адаптера и не совпадают с <c>NetworkInterface.Name</c>, из-за чего сопоставление
-    /// по имени часто не находит счётчик.
+    /// Measures network speed from the delta of each interface's byte counters.
+    /// <see cref="IPInterfaceStatistics"/> is used instead of PerformanceCounter: the
+    /// instance names of the "Network Interface" performance counters are derived from the
+    /// adapter description and do not match <c>NetworkInterface.Name</c>, so matching by
+    /// name frequently fails to find the counter.
     /// </summary>
     public class NetworkSensor
     {
@@ -31,7 +31,7 @@ namespace SystemBarIndicator.Sensors
                 }
                 catch
                 {
-                    // интерфейс без доступной IPv4-статистики — пропускаем
+                    // interface with no available IPv4 statistics — skip it
                 }
             }
         }
@@ -65,7 +65,7 @@ namespace SystemBarIndicator.Sensors
                 }
                 catch
                 {
-                    // пропускаем сбойный интерфейс
+                    // skip the failing interface
                 }
             }
 

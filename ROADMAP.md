@@ -1,98 +1,46 @@
-# Roadmap — SystemBar Indicator
+# Roadmap
 
-## Фаза 1: Фундамент (Недели 1-2)
+Where the project stands and what may come next. Items under **Ideas** are not commitments —
+they are the things most likely to be picked up, in roughly that order.
 
-### 1.1 Инициализация проекта
-- [ ] Создание структуры решения .NET 10 + WinUI 3
-- [ ] Настройка CI/CD (GitHub Actions)
-- [ ] Базовое окно-оверлей с прозрачным фоном
-- [ ] Позиционирование поверх панели задач
+## Done
 
-### 1.2 Базовые сенсоры
-- [ ] `CpuSensor` — общая загрузка CPU через PerformanceCounter
-- [ ] `RamSensor` — использование RAM через GlobalMemoryStatusEx
-- [ ] `NetworkSensor` — скорость сети через NetworkInterface
+- Taskbar bar with CPU, RAM, GPU, disk and network sections, plus CPU/GPU temperature
+- Fixed-width value slots and availability latches, so the layout never jumps when a value
+  changes width or a sensor drops out for a tick
+- Content-driven bar width, measured per frame (correct under PerMonitorV2 DPI)
+- History overlay with eight charts over the last ~120 samples
+- Smoothed disk/network dual bars — EMA plus an auto-scaling full-scale value, recalibrated
+  when the poll interval changes
+- Tray icon with tooltip and context menu
+- Appearance settings applied live: theme, opacity, font scale, section visibility, poll
+  interval, °C/°F
+- Position persistence, including recovery when the saved spot is no longer on screen
+  (`WM_DISPLAYCHANGE`)
+- Always-on-top via z-order in `WM_WINDOWPOSCHANGING` rather than a `SetWindowPos` loop
+- Single-instance guard (named mutex)
+- Elevation without a per-launch UAC prompt, via a scheduled task (`deploy/Install.ps1`)
+- LibreHardwareMonitorLib 0.9.6 with the signed PawnIO driver instead of WinRing0
+- Unit tests for all of `Core`; CI builds and tests on `windows-latest` with warnings as errors
 
-### 1.3 Первый рендер
-- [ ] GDI+ отрисовка текста на оверлее
-- [ ] Обновление данных каждые 1 секунду
-- [ ] Базовое форматирование (CPU: XX%, RAM: XX%)
+## Ideas
 
----
+**Distribution**
+- Prebuilt binaries on GitHub Releases, so users do not need the .NET SDK
+- Self-contained publish as an alternative to the framework-dependent one
+- Code signing, to avoid the SmartScreen warning
 
-## Фаза 2: Расширение сенсоров (Недели 3-4)
+**Monitoring**
+- CPU/GPU clock speeds
+- VRAM usage in the bar (`SensorData` already carries it; only the overlay uses it today)
+- Picking a specific disk or network interface instead of aggregating all of them
+- Per-core CPU load in the overlay
 
-### 2.1 GPU мониторинг
-- [ ] `GpuSensor` — загрузка GPU через DXGI / NVAPI / ADL
-- [ ] Использование VRAM
-- [ ] Температура GPU
+**Behaviour**
+- Auto-hide over fullscreen apps (games, video)
+- Threshold notifications
+- Exporting history to CSV/JSON
 
-### 2.2 Дисковый мониторинг
-- [ ] `DiskSensor` — чтение/запись через PerformanceCounter
-- [ ] Мониторинг нескольких дисков
-
-### 2.3 Температуры
-- [ ] `TemperatureSensor` — CPU температура через WMI / OpenHardwareMonitorLib
-- [ ] Интеграция с LibreHardwareMonitor для точных показаний
-
----
-
-## Фаза 3: UI/UX (Недели 5-6)
-
-### 3.1 Виджет на панели задач
-- [ ] Привязка к позиции панели задач (верх/низ/лево/право)
-- [ ] Автоматический ресайз при изменении DPI
-- [ ] Поддержка нескольких мониторов
-- [ ] Режимы отображения: компактный / полный / иконки
-
-### 3.2 Окно настроек
-- [ ] WinUI 3 Dashboard с настройками
-- [ ] Включение/выключение отдельных сенсоров
-- [ ] Настройка цветов и шрифтов
-- [ ] Настройка интервала обновления
-- [ ] Автозапуск с Windows
-
-### 3.3 Темы оформления
-- [ ] Светлая / тёмная тема (системная)
-- [ ] Пользовательские цвета
-- [ ] Glassmorphism / Mica эффекты
-
----
-
-## Фаза 4: Полировка (Недели 7-8)
-
-### 4.1 Производительность
-- [ ] Zero-allocation рендеринг
-- [ ] Фоновое/переднее определение активности
-- [ ] Оптимизация потребления CPU (< 0.5%)
-
-### 4.2 Стабильность
-- [ ] Graceful degradation при недоступности сенсоров
-- [ ] Логирование ошибок
-- [ ] Обработка смены разрешения / DPI
-
-### 4.3 Упаковка
-- [ ] MSI установщик (WiX Toolset)
-- [ ] Portable EXE
-- [ ] Автозапуск из реестра
-
----
-
-## Фаза 5: Релиз (Неделя 9)
-
-- [ ] Финальное тестирование
-- [ ] Документация пользователя
-- [ ] Публикация на GitHub Releases
-- [ ] Создание страницы проекта
-
----
-
-## Будущие улучшения (после v1.0)
-
-- [ ] Отображение частоты CPU/GPU
-- [ ] Графики истории нагрузки (sparkline)
-- [ ] Уведомления при превышении порогов
-- [ ] Поддержка плагинов для кастомных сенсоров
-- [ ] Интеграция с Windows Widgets
-- [ ] Экспорт данных в CSV/JSON
-- [ ] Удалённый мониторинг через WebSocket
+**Code**
+- Extract an `ISensor` interface once a third sensor family justifies it
+- Localisation, if there is demand for languages other than English
