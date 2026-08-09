@@ -35,6 +35,14 @@ flagged by Microsoft Defender. PawnIO is not bundled here — you install it you
 from its own site. Without it the app still runs and the vulnerable driver is never loaded;
 you simply do not get CPU temperature.
 
+## Release binaries
+
+The `win-x64` zip attached to a release is built and packaged on a maintainer machine, not
+by CI, and it is **not code-signed** — SmartScreen warns the first time you run it. If you
+would rather not trust a stranger's binary, build from source instead: everything needed is
+in this repository, and CI runs the same `dotnet build` and `dotnet test` on every push.
+
 ## Supported versions
 
-Only the current `main` branch is supported. There are no tagged releases yet.
+The latest release and the current `main` branch. Fixes go into `main` and ship with the
+next tag; there are no patch branches for older versions.
