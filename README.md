@@ -9,15 +9,13 @@ A small always-on-top system monitor that sits on the Windows 11 taskbar. It sho
 CPU, RAM, GPU, disk and network load plus CPU/GPU temperature, and expands into a
 history-graph overlay when you click it.
 
-```
-┃ CPU  12%  45C ┃ RAM  63% ┃ GPU   4%  38C ┃ D ▄▁ ┃ N ▁▆ ┃
-   └ load  └ temp                            │      └ down / up
-                                             └ read / write
-```
+![The bar sitting on the taskbar: CPU load and temperature, RAM, GPU load and temperature, then disk and network activity bars](docs/bar.png)
 
-Each section is a fixed-width slot, so the numbers never shift sideways as values change.
-`D` and `N` are drawn as a pair of bars instead of numbers: the top bar is disk read /
-network download, the bottom one is disk write / network upload.
+Reading left to right: CPU load and temperature, RAM usage, GPU load and temperature, then
+disk (`D`) and network (`N`). Each number lives in a fixed-width slot, so nothing shifts
+sideways as values change, and the colour follows the load level. Disk and network are drawn
+as a pair of bars rather than numbers — ▼ is read/download, ▲ is write/upload — smoothed and
+auto-scaled to recent peaks.
 
 ## Features
 
