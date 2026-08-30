@@ -1,13 +1,14 @@
 # SystemBar Indicator
 
 [![CI](https://github.com/coldneuro/SystemBarIndicator/actions/workflows/ci.yml/badge.svg)](https://github.com/coldneuro/SystemBarIndicator/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/coldneuro/SystemBarIndicator)](https://github.com/coldneuro/SystemBarIndicator/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6)](#requirements)
 
 A small always-on-top system monitor that sits on the Windows 11 taskbar. It shows live
-CPU, RAM, GPU, disk and network load plus CPU/GPU temperature, and expands into a
-history-graph overlay when you click it.
+CPU, RAM, GPU, disk and network load plus CPU/GPU/VRAM temperature, keeps itself up to
+date from GitHub Releases, and expands into a history-graph overlay when you click it.
 
 ![The bar sitting on the taskbar: CPU load and temperature, RAM, GPU load and temperature, then disk and network activity bars](docs/bar.png)
 
