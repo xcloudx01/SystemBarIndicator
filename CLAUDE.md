@@ -5,7 +5,7 @@ Guidance for working in this repository.
 ## Overview
 
 SystemBar Indicator — a small Windows 11 tray/taskbar system monitor (CPU, RAM, GPU,
-disk, network usage + CPU/GPU temperature) with a pop-up history-graph overlay.
+disk, network usage + CPU/GPU/VRAM temperature) with a pop-up history-graph overlay.
 WinForms + GDI+ on .NET 10. Hardware temperatures via LibreHardwareMonitorLib.
 
 ## Solution layout
