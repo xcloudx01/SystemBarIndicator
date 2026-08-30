@@ -37,6 +37,7 @@ namespace SystemBarIndicator
 
         private readonly ComboBox _interval = new();
         private readonly CheckBox _fahrenheit = new();
+        private readonly CheckBox _autoUpdate = new();
 
         private static readonly string[] ThemeItems = { ThemeNames.Dark, ThemeNames.Light, ThemeNames.Custom };
 
@@ -52,7 +53,7 @@ namespace SystemBarIndicator
             MinimizeBox = false;
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(380, 462);
+            ClientSize = new Size(380, 488);
 
             BuildAppearanceGroup();
             BuildSectionsGroup();
@@ -136,7 +137,7 @@ namespace SystemBarIndicator
 
         private void BuildOtherGroup()
         {
-            var box = new GroupBox { Text = "Behaviour", Bounds = new Rectangle(12, 312, 356, 92) };
+            var box = new GroupBox { Text = "Behaviour", Bounds = new Rectangle(12, 312, 356, 118) };
 
             box.Controls.Add(new Label { Text = "Update every:", Bounds = new Rectangle(12, 28, 100, 20) });
             _interval.Bounds = new Rectangle(118, 24, 100, 24);
@@ -152,16 +153,22 @@ namespace SystemBarIndicator
             _fahrenheit.CheckedChanged += (s, e) => Apply();
             box.Controls.Add(_fahrenheit);
 
+            _autoUpdate.Text = "Install updates automatically";
+            _autoUpdate.AutoSize = true;
+            _autoUpdate.Location = new Point(14, 84);
+            _autoUpdate.CheckedChanged += (s, e) => Apply();
+            box.Controls.Add(_autoUpdate);
+
             Controls.Add(box);
         }
 
         private void BuildButtons()
         {
-            var defaults = new Button { Text = "Defaults", Bounds = new Rectangle(12, 414, 100, 30) };
+            var defaults = new Button { Text = "Defaults", Bounds = new Rectangle(12, 440, 100, 30) };
             defaults.Click += (s, e) => LoadFromSettings(new AppSettings(), apply: true);
             Controls.Add(defaults);
 
-            var close = new Button { Text = "Close", Bounds = new Rectangle(268, 414, 100, 30) };
+            var close = new Button { Text = "Close", Bounds = new Rectangle(268, 440, 100, 30) };
             close.Click += (s, e) => Close();
             Controls.Add(close);
             AcceptButton = close;
@@ -199,6 +206,7 @@ namespace SystemBarIndicator
 
                 _interval.SelectedIndex = Math.Max(0, Array.IndexOf(AppSettings.AllowedIntervalsMs, s.UpdateIntervalMs));
                 _fahrenheit.Checked = s.UseFahrenheit;
+                _autoUpdate.Checked = s.AutoUpdate;
 
                 UpdateColorButtonState();
             }
@@ -255,6 +263,7 @@ namespace SystemBarIndicator
                 ? AppSettings.AllowedIntervalsMs[_interval.SelectedIndex]
                 : AppSettings.DefaultIntervalMs;
             s.UseFahrenheit = _fahrenheit.Checked;
+            s.AutoUpdate = _autoUpdate.Checked;
 
             _working = s;
             _owner.ApplySettings(s);

@@ -50,6 +50,7 @@ namespace SystemBarIndicator.Tests
                 FontScale = 1.25,
                 UpdateIntervalMs = 2000,
                 UseFahrenheit = true,
+                AutoUpdate = false,
                 ShowCpu = false,
                 ShowCpuTemp = false,
                 ShowRam = false,
@@ -72,6 +73,7 @@ namespace SystemBarIndicator.Tests
             Assert.Equal(1.25, loaded.FontScale, 6);
             Assert.Equal(2000, loaded.UpdateIntervalMs);
             Assert.True(loaded.UseFahrenheit);
+            Assert.False(loaded.AutoUpdate);
             Assert.False(loaded.ShowCpu);
             Assert.False(loaded.ShowCpuTemp);
             Assert.False(loaded.ShowRam);

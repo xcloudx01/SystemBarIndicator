@@ -17,6 +17,7 @@ SystemBarIndicator.sln
 │   │   ├── Models/                #   SensorData, DataPoint, DataHistory
 │   │   ├── Monitoring/            #   LoadLevel + thresholds (LoadLevels)
 │   │   ├── Configuration/         #   AppSettings, SettingsStore, WindowPlacement, ColorCodec
+│   │   ├── Updates/               #   UpdateVersion, UpdateAssets, ReleaseChecksums
 │   │   └── Util/                  #   Formatting, Ema, AutoScale, SmoothingRates
 │   └── SystemBarIndicator.App/    # net10.0-windows — WinForms UI + Windows sensors (WinExe)
 │       ├── Program.cs             #   MainForm: the taskbar bar, drawing, tray
@@ -24,6 +25,7 @@ SystemBarIndicator.sln
 │       ├── SettingsForm.cs        #   appearance settings window
 │       ├── BarTheme.cs            #   swappable GDI+ resources (theme + font scale)
 │       ├── Sensors/               #   Cpu/Ram/Disk/Network/Hardware (PerfCounter, P/Invoke, LHM)
+│       ├── Updates/               #   UpdateChecker (GitHub API), UpdateInstaller (self-update)
 │       └── Logging/Logger.cs      #   file logger
 └── tests/
     └── SystemBarIndicator.Tests/  # net10.0 — xUnit, references Core only
@@ -118,6 +120,21 @@ dotnet run --project src/SystemBarIndicator.App   # run the app
   changed (`AppSettings.DiffersInAppearance`). `MainForm.ApplySettings` deliberately
   **ignores** `BarRight`/`BarTop` from the incoming snapshot: otherwise an open settings
   window would overwrite the position with its own stale copy.
+
+- **Auto-update.** `UpdateChecker` (App) asks the GitHub Releases API — first check 60 s
+  after start, then daily; Debug builds never auto-update (`AutoUpdateSupported`), so a
+  developer copy cannot replace itself with a release download. Tag-vs-assembly comparison,
+  asset picking and `SHA256SUMS.txt` parsing live in `Core/Updates` (covered by tests); a
+  pre-release tag like `v1.1.0-beta` deliberately parses to null and is ignored.
+  `UpdateInstaller` downloads the constant-name `SystemBarIndicator-win-x64.zip` into
+  `%LOCALAPPDATA%\SystemBarIndicator\update`, verifies it when the release ships
+  `SHA256SUMS.txt` (a present-but-wrong checksum aborts; an absent one only logs), unpacks
+  it (the exe sits one folder down — the release packs a versioned directory) and hands the
+  swap to a generated `swap.ps1`, ASCII-only per the `.ps1` encoding rule: a running exe
+  cannot replace its own files. The script waits for the process to exit, copies over
+  `AppContext.BaseDirectory` with retries and restarts via `schtasks /run` (fallback: plain
+  `Start-Process`, unelevated). The release shape the updater relies on is documented in
+  `deploy/README.md#releasing`.
 
 ## Conventions
 

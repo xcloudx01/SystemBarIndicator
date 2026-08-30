@@ -9,6 +9,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Auto-update: the app checks GitHub Releases shortly after start and then daily, and
+  installs a newer version by itself — download, SHA-256 verification (when the release
+  ships `SHA256SUMS.txt`), file swap after exit and a restart through the scheduled task.
+  "Install updates automatically" in the settings turns it off; "Check for Updates..." in
+  the tray menu asks on demand and reports the outcome either way.
 - VRAM temperature: shown in the bar next to the GPU temperature (under a dim `VRAM`
   label), as a ninth chart in the history overlay, and as its own section checkbox in the
   settings. Available where LibreHardwareMonitor exposes a GPU memory temperature sensor

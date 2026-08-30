@@ -45,6 +45,9 @@ namespace SystemBarIndicator.Configuration
         /// <summary>Show temperatures in degrees Fahrenheit.</summary>
         public bool UseFahrenheit { get; set; }
 
+        /// <summary>Install new releases automatically (checked daily against GitHub).</summary>
+        public bool AutoUpdate { get; set; } = true;
+
         // --- Which sections to show ---
         public bool ShowCpu { get; set; } = true;
         public bool ShowCpuTemp { get; set; } = true;
@@ -134,6 +137,7 @@ namespace SystemBarIndicator.Configuration
             FontScale = FontScale,
             UpdateIntervalMs = UpdateIntervalMs,
             UseFahrenheit = UseFahrenheit,
+            AutoUpdate = AutoUpdate,
             ShowCpu = ShowCpu,
             ShowCpuTemp = ShowCpuTemp,
             ShowRam = ShowRam,

@@ -1,11 +1,13 @@
 using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using SystemBarIndicator.Configuration;
 using SystemBarIndicator.Models;
 using SystemBarIndicator.Monitoring;
 using SystemBarIndicator.Sensors;
+using SystemBarIndicator.Updates;
 using SystemBarIndicator.Util;
 
 namespace SystemBarIndicator
@@ -122,6 +124,20 @@ namespace SystemBarIndicator
         private const int TempGap = 6;      // after a temperature
         private const int SeparatorGap = 8; // after a separator
 
+        // Update checks: the first one shortly after start, then daily while running.
+        private const int FirstUpdateCheckDelayMs = 60_000;
+        private const int UpdateCheckIntervalMs = 24 * 60 * 60 * 1000;
+
+        // Auto-update is compiled out of Debug builds: a developer copy running from bin
+        // must never replace itself with a release download. The manual tray-menu check
+        // stays available everywhere. A readonly field, not a const — a const would turn
+        // the checks into unreachable code and fail the warning-free build.
+#if DEBUG
+        private static readonly bool AutoUpdateSupported = false;
+#else
+        private static readonly bool AutoUpdateSupported = true;
+#endif
+
         // The base smoothing coefficients are calibrated for a 1 s tick; at any other
         // interval they are recomputed (SmoothingRates).
         private const float NetAlphaPerSecond = 0.4f;
@@ -148,6 +164,8 @@ namespace SystemBarIndicator
         private readonly Timer _timer;
         private readonly Timer _topmostTimer;
         private readonly Timer _saveTimer;
+        private readonly Timer _updateCheckTimer;
+        private bool _updateBusy; // one update check or install at a time
         private readonly NotifyIcon _trayIcon;
         private readonly ContextMenuStrip _menu; // shared by the tray icon and the bar itself
         private readonly DataHistory _history;
@@ -235,6 +253,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
             _menu.Items.Add("Graphs", null, (s, e) => OpenGraphOverlay());
             _menu.Items.Add("Settings...", null, (s, e) => OpenSettings());
             _menu.Items.Add("Reset Position", null, (s, e) => ResetPosition());
+            _menu.Items.Add("Check for Updates...", null, async (s, e) => await RunUpdateCheckAsync(manual: true));
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add("Exit", null, (s, e) => { _trayIcon.Visible = false; Application.Exit(); });
             _trayIcon.ContextMenuStrip = _menu;
@@ -256,6 +275,20 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
             // cause a storm of disk writes.
             _saveTimer = new Timer { Interval = 1500 };
             _saveTimer.Tick += (s, e) => { _saveTimer.Stop(); FlushSettings(); };
+
+            // A WinForms timer, so the async continuations land back on the UI thread.
+            _updateCheckTimer = new Timer { Interval = FirstUpdateCheckDelayMs };
+            _updateCheckTimer.Tick += async (s, e) =>
+            {
+                _updateCheckTimer.Interval = UpdateCheckIntervalMs;
+                if (_settings.AutoUpdate)
+                    await RunUpdateCheckAsync(manual: false);
+            };
+            if (AutoUpdateSupported)
+            {
+                UpdateInstaller.TryCleanStaging(); // leftovers of the update that started this build
+                _updateCheckTimer.Start();
+            }
         }
 
         private void InitSensors()
@@ -515,6 +548,81 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
             if (e.Button == MouseButtons.Left)
             {
                 OpenGraphOverlay();
+            }
+        }
+
+        // --- Auto-update ---
+
+        /// <summary>
+        /// One pass of check → confirm → install. Runs on the UI thread (awaits keep it
+        /// responsive); a manual pass reports every outcome, the daily automatic one only
+        /// logs, so a machine that is offline for a week stays quiet.
+        /// </summary>
+        private async Task RunUpdateCheckAsync(bool manual)
+        {
+            if (_updateBusy)
+                return;
+            _updateBusy = true;
+            try
+            {
+                UpdateInfo? update;
+                try
+                {
+                    update = await new UpdateChecker().CheckAsync(System.Threading.CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("UpdateChecker.Check", ex);
+                    if (manual)
+                        MessageBox.Show(this, "Could not check for updates — see app.log for details.",
+                            "SystemBar Indicator", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                if (update == null)
+                {
+                    if (manual)
+                        MessageBox.Show(this,
+                            $"You are running the latest version ({UpdateChecker.CurrentVersion().ToString(3)}).",
+                            "SystemBar Indicator", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                if (manual)
+                {
+                    var answer = MessageBox.Show(this,
+                        $"Version {update.Version.ToString(3)} is available (installed: {UpdateChecker.CurrentVersion().ToString(3)}).\n\n" +
+                        "Install now? The bar will restart.",
+                        "SystemBar Indicator", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    if (answer != DialogResult.Yes)
+                        return;
+                }
+                else
+                {
+                    _trayIcon.ShowBalloonTip(5000, "SystemBar Indicator",
+                        $"Updating to version {update.Version.ToString(3)}...", ToolTipIcon.Info);
+                }
+
+                try
+                {
+                    // True means the swap script is waiting for this process to exit.
+                    if (await UpdateInstaller.InstallAsync(update, System.Threading.CancellationToken.None))
+                    {
+                        _trayIcon.Visible = false;
+                        Application.Exit();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("UpdateInstaller.Install", ex);
+                    if (manual)
+                        MessageBox.Show(this, "The update failed — see app.log for details.",
+                            "SystemBar Indicator", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            finally
+            {
+                _updateBusy = false;
             }
         }
 
@@ -1020,6 +1128,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
             _timer.Stop();
             _topmostTimer.Stop();
             _saveTimer.Stop();
+            _updateCheckTimer.Stop();
             FlushSettings();
 
             if (_settingsForm != null && !_settingsForm.IsDisposed)
@@ -1039,6 +1148,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
             _timer.Dispose();
             _topmostTimer.Dispose();
             _saveTimer.Dispose();
+            _updateCheckTimer.Dispose();
             base.OnFormClosing(e);
         }
 

@@ -97,13 +97,27 @@ not publish.
    inside the archive, while the asset name itself stays constant — the main README links to
    `/releases/latest`, so a version in the file name would break it on the next release.
 
-6. Create the release with notes and the asset:
+6. Write the checksum file — the in-app auto-updater verifies the download against it
+   (a release without one still installs, but with the verification skipped):
+
+   ```powershell
+   $hash = (Get-FileHash "$env:TEMP\SystemBarIndicator-win-x64.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
+   Set-Content "$env:TEMP\SHA256SUMS.txt" -Value "$hash *SystemBarIndicator-win-x64.zip" -Encoding ascii
+   ```
+
+7. Create the release with notes and both assets:
 
    ```powershell
    gh release create vX.Y.Z --title "SystemBar Indicator X.Y.Z" `
-       --notes-file notes.md --verify-tag "$env:TEMP\SystemBarIndicator-win-x64.zip"
+       --notes-file notes.md --verify-tag `
+       "$env:TEMP\SystemBarIndicator-win-x64.zip" "$env:TEMP\SHA256SUMS.txt"
    ```
 
-7. Unpack the published archive into an empty folder and start the exe once. A run from
+   The auto-updater in installed copies relies on this shape: a plain `vX.Y.Z` tag (a
+   suffixed tag like `v1.1.0-beta` is ignored), a single `.zip` asset with `win-x64` in
+   its name, the exe at the archive root or one folder down, and `SHA256SUMS.txt` in the
+   `<hash> *<filename>` format.
+
+8. Unpack the published archive into an empty folder and start the exe once. A run from
    `bin` proves nothing about the packaged layout — LHM 0.9.6 is a RID-split package, and a
    file missing from the flat publish only shows up here.

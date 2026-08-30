@@ -42,6 +42,8 @@ the screen.
   is pulled back on screen if that spot no longer exists
 - **Appearance settings** — theme, opacity, font scale, which sections to show, poll
   interval, °C/°F
+- **Auto-update** — checks GitHub Releases daily and installs new versions by itself
+  (can be turned off; **Check for Updates...** in the tray menu works on demand)
 
 ## Requirements
 
@@ -100,6 +102,7 @@ Right-click the tray icon — or the bar itself — for the menu:
 | **Graphs** | Open/close the history overlay (same as clicking the bar itself) |
 | **Settings...** | Appearance settings window |
 | **Reset Position** | Snap the bar back to the taskbar and forget the saved position |
+| **Check for Updates...** | Ask GitHub for a newer release and offer to install it |
 | **Exit** | Quit |
 
 **Moving it.** Drag the bar with the mouse — the position is remembered and restored on
@@ -112,9 +115,10 @@ the bar is moved back into the visible area.
 - opacity, 30–100 %
 - theme: dark, light, or a custom background colour
 - font scale, 75–175 %
-- which sections to show: CPU, CPU temp, RAM, GPU, GPU temp, disk, network
+- which sections to show: CPU, CPU temp, RAM, GPU, GPU temp, VRAM temp, disk, network
 - poll interval: 0.5 / 1 / 2 / 5 s — smoothing rates are recalibrated with it
 - temperature in °C or °F
+- automatic update installation on or off
 
 ## Configuration files
 

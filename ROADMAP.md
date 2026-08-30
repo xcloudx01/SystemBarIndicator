@@ -23,6 +23,8 @@ they are the things most likely to be picked up, in roughly that order.
 - LibreHardwareMonitorLib 0.9.6 with the signed PawnIO driver instead of WinRing0
 - Unit tests for all of `Core`; CI builds and tests on `windows-latest` with warnings as errors
 - Prebuilt `win-x64` binaries on GitHub Releases, so running the app needs no .NET SDK
+- Auto-update from GitHub Releases: daily check, SHA-256 verification, file swap by an
+  external script and restart through the scheduled task
 
 ## Ideas
 
