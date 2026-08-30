@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-08-31
+
 ### Added
 
 - CPU load now survives a machine whose Windows performance counters are unavailable: it
@@ -79,6 +81,7 @@ individual steps are in the commit log.
 - Unit tests covering all of `Core`; CI builds and tests on `windows-latest` with warnings
   as errors.
 
-[Unreleased]: https://github.com/coldneuro/SystemBarIndicator/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/coldneuro/SystemBarIndicator/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/coldneuro/SystemBarIndicator/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/coldneuro/SystemBarIndicator/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/coldneuro/SystemBarIndicator/releases/tag/v1.0.0
