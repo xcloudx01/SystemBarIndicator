@@ -30,7 +30,12 @@ namespace SystemBarIndicator.Updates
 
         private static HttpClient CreateClient()
         {
-            var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            // A separate, shorter connect timeout so a black-holed host gives up quickly
+            // instead of occupying the full request timeout. It bounds establishing the
+            // connection only — DNS, proxy, TLS and a stalled response still fall under
+            // the overall Timeout below.
+            var handler = new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(5) };
+            var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
             // GitHub rejects requests without a User-Agent.
             client.DefaultRequestHeaders.UserAgent.Add(
                 new ProductInfoHeaderValue("SystemBarIndicator", CurrentVersion().ToString(3)));

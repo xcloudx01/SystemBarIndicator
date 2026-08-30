@@ -7,6 +7,30 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- CPU load now survives a machine whose Windows performance counters are unavailable: it
+  falls back to a kernel call (`GetSystemTimes`) that needs no counter registry, at startup
+  or if the counter breaks later while running.
+
+### Changed
+
+- The disk section is hidden, and marked `(n/a)` in the settings, when the performance
+  counters it needs are unavailable — instead of drawing bars that claim the disk is idle.
+  A one-time notification explains it, with a Troubleshooting entry in the README.
+- Failed update checks are logged by what actually went wrong: an unreachable network is a
+  warning and is not repeated on every check, while an unexpected answer from GitHub stays
+  an error. Connection attempts also give up sooner.
+
+### Fixed
+
+- A performance counter that broke *after* startup aborted the whole polling cycle — every
+  sensor, the graph history and the repaint with it — once per second. CPU and disk counters
+  now fail on their own.
+- The README no longer claims the app makes no network requests; it has contacted the GitHub
+  Releases API since 1.1.0. What is and is not sent is now spelled out.
+- Performance counters left undisposed when a sensor failed partway through starting up.
+
 ## [1.1.0] - 2026-08-30
 
 ### Added

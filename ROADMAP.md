@@ -36,6 +36,14 @@ they are the things most likely to be picked up, in roughly that order.
 - Code signing, to avoid the SmartScreen warning
 
 **Monitoring**
+- Research whether OEM laptops expose CPU/GPU temperature through vendor firmware interfaces
+  (ACPI/WMI) that need no kernel driver. One field report confirms an Acer Nitro does, via
+  `root/WMI` `AcerGamingFunction`; whether usable equivalents exist across vendors is exactly
+  what needs establishing before this becomes a second sensor backend to maintain
+- An opt-in `-InstallPawnIO` switch for `Install.ps1`, gated on verifying the Authenticode
+  signature of the downloaded installer before running it
+- Disk throughput without performance counters (ETW or `IOCTL_DISK_PERFORMANCE`), so the
+  section survives a machine where the counter registry is disabled
 - CPU/GPU clock speeds
 - VRAM usage in the bar (`SensorData` already carries it; only the overlay uses it today)
 - Picking a specific disk or network interface instead of aggregating all of them

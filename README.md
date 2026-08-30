@@ -54,8 +54,9 @@ the screen.
   yourself
 - Administrator rights — required to read hardware temperatures (the sensor driver is
   loaded into the kernel)
-- [PawnIO](https://pawnio.eu) — **optional**, needed only for CPU temperature. See
-  [Permissions and privacy](#permissions-and-privacy) below
+- [PawnIO](https://pawnio.eu) — needed for **CPU** temperature, on AMD as well as Intel.
+  Without it the CPU temperature reads 0 while GPU temperature still works; see
+  [Troubleshooting](#troubleshooting)
 
 ## Install
 
@@ -84,6 +85,8 @@ You get exactly one UAC prompt during installation — for registering the sched
 See [deploy/README.md](deploy/README.md) for how and why this works, and for uninstalling.
 
 ### Option 3 — run from source
+
+Needs the .NET 10 **SDK**, not just the desktop runtime that a prebuilt release requires.
 
 ```powershell
 git clone https://github.com/coldneuro/SystemBarIndicator.git
@@ -131,12 +134,38 @@ the bar is moved back into the visible area.
 Writes are atomic (temp file + move), and a corrupt or missing settings file falls back to
 defaults rather than failing to start.
 
+## Troubleshooting
+
+**CPU temperature reads 0.** The CPU temperature comes from LibreHardwareMonitor, which
+reads it through the kernel-level [PawnIO](https://pawnio.eu) driver — on AMD as well as
+Intel. Install PawnIO once and run the app elevated (option 2 above). GPU temperature does
+not need it and works without. If the app is not elevated, no temperature is available at
+all.
+
+**The disk section is missing, and `app.log` mentions performance counters.** Windows
+performance counters are unavailable on the machine, so disk throughput cannot be read; the
+section is hidden rather than drawn as permanently idle, and the settings window marks it
+`(n/a)`. CPU load is unaffected — it falls back to a kernel call that needs no counters.
+
+The counters can be *disabled* (a policy or registry setting) or *damaged* (broken
+registration), and the two need different fixes — Microsoft's
+[guide to rebuilding performance counters](https://learn.microsoft.com/en-us/troubleshoot/windows-server/performance/manually-rebuild-performance-counters)
+covers both. Check the disable flags first, and only then rebuild with `lodctr /R`;
+rebuilding alone will not re-enable counters that are switched off.
+
+**SmartScreen warns before the app starts.** The release builds are not code-signed. Click
+"More info" → "Run anyway", or build from source yourself.
+
 ## Permissions and privacy
 
 This app reads hardware sensors, so it is worth being explicit about what it does:
 
-- **No network access.** Nothing is sent anywhere; there is no telemetry, no update check,
-  no analytics. Network counters are read locally from the OS.
+- **The only network access is the update check.** The app asks the GitHub Releases API
+  whether a newer version exists, and downloads the release archive when it installs one.
+  Nothing about you or your machine is sent: no telemetry, no analytics, no identifiers
+  beyond the `User-Agent` GitHub requires. Turn it off with *Install updates automatically*
+  in the settings and the app makes no network requests at all. Network counters are read
+  locally from the OS either way.
 - **Why administrator rights.** Temperatures come from
   [LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor),
   which reads CPU sensors through a kernel driver — that needs elevation. Load, RAM, disk
@@ -144,7 +173,7 @@ This app reads hardware sensors, so it is worth being explicit about what it doe
 - **PawnIO instead of WinRing0.** LibreHardwareMonitor 0.9.5+ uses the signed
   [PawnIO](https://pawnio.eu) driver rather than WinRing0, which Microsoft Defender flags
   as vulnerable. PawnIO is installed separately and only once. Without it you lose CPU
-  temperature — and importantly, the vulnerable driver is never loaded.
+  temperature on both AMD and Intel — and importantly, the vulnerable driver is never loaded.
 - **The bundled manifest is `asInvoker`**, not `requireAdministrator`. Elevation is
   arranged by the install script through a scheduled task, so nothing silently elevates
   itself.

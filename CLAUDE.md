@@ -44,6 +44,15 @@ dotnet run --project src/SystemBarIndicator.App   # run the app
 - **Core vs App.** Any logic that does not depend on WinForms or hardware lives in `Core`
   and is covered by tests. UI and OS access (P/Invoke, PerformanceCounter, LHM) live in
   `App`. Put new testable rules (formatting, thresholds, aggregation) in `Core`.
+- **Performance counters are optional.** `Processor`/`PhysicalDisk` counters can be disabled
+  machine-wide (`Perflib\Disable Performance Counters`, Win32 error 1058) or simply damaged,
+  and they can start failing **after** a successful start — which, uncaught, would abort the
+  whole polling tick every second. `PerfCounters.IsExpectedFailure` marks those cases;
+  `CpuSensor` then switches one-way to `SystemTimesCpuSource` (`GetSystemTimes`, no registry,
+  no elevation; the arithmetic lives in `Core/Monitoring/CpuLoad` — the deltas are **unsigned**,
+  so the idle-vs-total guards must come before the subtraction), and `DiskSensor` latches
+  `Available = false`, which hides the section instead of drawing an idle-looking disk. Both
+  log once, not once per tick.
 - **Polling.** `MainForm._timer` (1 s) refreshes a single `SensorData _current` snapshot
   through the `Sensors` classes, then pushes a point into `DataHistory` (a 120-point ring
   buffer). `HardwareSensor.Update()` must be called once per tick — without it LHM returns
@@ -134,7 +143,11 @@ dotnet run --project src/SystemBarIndicator.App   # run the app
   cannot replace its own files. The script waits for the process to exit, copies over
   `AppContext.BaseDirectory` with retries and restarts via `schtasks /run` (fallback: plain
   `Start-Process`, unelevated). The release shape the updater relies on is documented in
-  `deploy/README.md#releasing`.
+  `deploy/README.md#releasing`. Failed checks are classified by `Core/Updates/UpdateFailures`
+  and de-duplicated on its stable `Key`: `EnsureSuccessStatusCode` raises the same
+  `HttpRequestException` as a dead connection, so severity comes from `StatusCode` (null =
+  transport = transient; 403/408/429/5xx transient; other 4xx and unreadable JSON are defects)
+  rather than from the exception type, and repeats of the same key are not logged again.
 
 ## Conventions
 

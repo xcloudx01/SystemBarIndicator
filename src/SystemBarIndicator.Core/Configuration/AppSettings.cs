@@ -48,6 +48,14 @@ namespace SystemBarIndicator.Configuration
         /// <summary>Install new releases automatically (checked daily against GitHub).</summary>
         public bool AutoUpdate { get; set; } = true;
 
+        /// <summary>
+        /// Internal state, not a user preference: whether the "performance counters are
+        /// unavailable" notice has already been shown for the current episode. Without it the
+        /// notice would reappear at every logon on a machine whose counters stay off; it is
+        /// re-armed as soon as a run finds the counters working again.
+        /// </summary>
+        public bool PerfCounterNoticeShown { get; set; }
+
         // --- Which sections to show ---
         public bool ShowCpu { get; set; } = true;
         public bool ShowCpuTemp { get; set; } = true;
@@ -138,6 +146,7 @@ namespace SystemBarIndicator.Configuration
             UpdateIntervalMs = UpdateIntervalMs,
             UseFahrenheit = UseFahrenheit,
             AutoUpdate = AutoUpdate,
+            PerfCounterNoticeShown = PerfCounterNoticeShown,
             ShowCpu = ShowCpu,
             ShowCpuTemp = ShowCpuTemp,
             ShowRam = ShowRam,

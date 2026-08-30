@@ -166,6 +166,9 @@ namespace SystemBarIndicator
         private readonly Timer _saveTimer;
         private readonly Timer _updateCheckTimer;
         private bool _updateBusy; // one update check or install at a time
+        // Identity of the last logged check failure, so a permanently unreachable network
+        // writes one line instead of one per check.
+        private string? _lastUpdateFailureKey;
         private readonly NotifyIcon _trayIcon;
         private readonly ContextMenuStrip _menu; // shared by the tray icon and the bar itself
         private readonly DataHistory _history;
@@ -191,6 +194,9 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
         private bool _hasGpu;
         private bool _hasGpuTemp;
         private bool _hasGpuVramTemp;
+        // Disk works the other way round: it is available until the counters prove otherwise
+        // (they can be disabled machine-wide), and it never comes back within a run.
+        private bool _diskAvailable;
 
         private int _pendingBarWidth; // 0 means no width adjustment is scheduled
 
@@ -209,6 +215,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
         public bool HasGpuSensor => _hasGpu;
         public bool HasGpuTempSensor => _hasGpuTemp;
         public bool HasGpuVramTempSensor => _hasGpuVramTemp;
+        public bool HasDiskSensor => _diskAvailable;
 
         private SensorData GetCurrentData() => _current;
 
@@ -297,7 +304,18 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
             catch (Exception ex) { Logger.Error("CpuSensor.init", ex); }
 
             try { _diskSensor = new DiskSensor(); }
-            catch (Exception ex) { Logger.Error("DiskSensor.init", ex); }
+            catch (Exception ex)
+            {
+                // Expected where the performance-counter service is disabled: the section is
+                // hidden rather than drawn as permanently idle.
+                if (PerfCounters.IsExpectedFailure(ex))
+                    Logger.Warn($"disk performance counters unavailable ({PerfCounters.Describe(ex)}); " +
+                                "disk activity will not be shown");
+                else
+                    Logger.Error("DiskSensor.init", ex);
+            }
+
+            _diskAvailable = _diskSensor?.Available == true;
 
             try { _networkSensor = new NetworkSensor(); }
             catch (Exception ex) { Logger.Error("NetworkSensor.init", ex); }
@@ -323,6 +341,41 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
             TryRestoreSavedPosition();
             _positionTrackingReady = true;
             UpdateData();
+            MaybeShowPerfCounterNotice();
+        }
+
+        /// <summary>
+        /// Tells the user once why the disk section is missing. Deliberately narrow: it fires
+        /// only when something visible was actually lost — CPU load survives on the
+        /// GetSystemTimes fallback, so a working CPU section must not be called "limited".
+        /// The notice is not a repair instruction either: a failed counter can mean disabled,
+        /// damaged or unreadable counters, and those need different fixes (see the README).
+        /// A tray balloon can be suppressed by Windows, so the settings "(n/a)" marker and the
+        /// README remain the durable explanation.
+        /// </summary>
+        private void MaybeShowPerfCounterNotice()
+        {
+            if (_diskAvailable)
+            {
+                // Counters are healthy: re-arm, so a later breakage is reported again.
+                if (_settings.PerfCounterNoticeShown)
+                {
+                    _settings.PerfCounterNoticeShown = false;
+                    MarkSettingsDirty();
+                }
+                return;
+            }
+
+            if (_settings.PerfCounterNoticeShown || !_settings.ShowDisk)
+                return;
+
+            _settings.PerfCounterNoticeShown = true;
+            MarkSettingsDirty();
+
+            _trayIcon.ShowBalloonTip(10000, "SystemBar Indicator",
+                "Windows performance counters are unavailable, so disk activity cannot be shown. " +
+                "CPU usage is measured another way and is unaffected — see Troubleshooting in the README.",
+                ToolTipIcon.Info);
         }
 
         private void PositionOnTaskbar()
@@ -475,6 +528,8 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
                     _current.DiskRead = disk.readMBps;
                     _current.DiskWrite = disk.writeMBps;
                     _current.DiskUsagePercent = disk.usagePercent;
+                    // The sensor gives up permanently if its counters break mid-run.
+                    _diskAvailable &= _diskSensor.Available;
                 }
 
                 float dskR = _diskReadEma.Update(_current.DiskRead);
@@ -569,10 +624,11 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
                 try
                 {
                     update = await new UpdateChecker().CheckAsync(System.Threading.CancellationToken.None);
+                    _lastUpdateFailureKey = null; // a success re-arms the log for the next failure
                 }
                 catch (Exception ex)
                 {
-                    Logger.Error("UpdateChecker.Check", ex);
+                    LogUpdateCheckFailure(ex, manual);
                     if (manual)
                         MessageBox.Show(this, "Could not check for updates — see app.log for details.",
                             "SystemBar Indicator", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -624,6 +680,28 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
             {
                 _updateBusy = false;
             }
+        }
+
+        /// <summary>
+        /// Logs a failed check at the severity it deserves. An unreachable host is a fact of
+        /// life, not a defect, and repeating the same one daily would bury the log — but a
+        /// 404 from a renamed repository must not be softened into a warning either.
+        /// </summary>
+        private void LogUpdateCheckFailure(Exception ex, bool manual)
+        {
+            var failure = UpdateFailures.Classify(ex, cancellationRequested: false);
+            bool repeat = failure.Key == _lastUpdateFailureKey;
+            _lastUpdateFailureKey = failure.Key;
+
+            // A check the user asked for always leaves a trace; the daily one only when the
+            // kind of failure changed.
+            if (repeat && !manual)
+                return;
+
+            if (failure.IsTransient)
+                Logger.Warn($"update check failed ({failure.Key}): {ex.GetType().Name}: {ex.Message}");
+            else
+                Logger.Error("UpdateChecker.Check", ex);
         }
 
         // --- Settings ---
@@ -880,7 +958,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
                 }
             }
 
-            if (s.ShowDisk)
+            if (s.ShowDisk && _diskAvailable)
             {
                 x = Separate(g, x, y, lineHeight, ref anyDrawn);
                 x = DrawDualBars(g, "D", _diskScale.Fraction(_diskReadEma.Value), _diskScale.Fraction(_diskWriteEma.Value),

@@ -115,7 +115,7 @@ namespace SystemBarIndicator
             SetUpCheck(_showRam, "RAM", new Rectangle(14, 50, 160, 22), available: true, box);
             SetUpCheck(_showGpu, "GPU", new Rectangle(180, 50, 165, 22), _owner.HasGpuSensor, box);
             SetUpCheck(_showGpuTemp, "GPU temperature", new Rectangle(14, 76, 160, 22), _owner.HasGpuTempSensor, box);
-            SetUpCheck(_showDisk, "Disk", new Rectangle(180, 76, 165, 22), available: true, box);
+            SetUpCheck(_showDisk, "Disk", new Rectangle(180, 76, 165, 22), _owner.HasDiskSensor, box);
             SetUpCheck(_showNetwork, "Network", new Rectangle(14, 102, 160, 22), available: true, box);
             SetUpCheck(_showGpuVramTemp, "VRAM temperature", new Rectangle(180, 102, 165, 22), _owner.HasGpuVramTempSensor, box);
 

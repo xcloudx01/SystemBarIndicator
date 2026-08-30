@@ -5,9 +5,11 @@
     shortcut that triggers the task silently.
 
 .DESCRIPTION
-    The app manifest is asInvoker, but it needs administrator rights to read CPU sensors
-    (PawnIO kernel driver via LibreHardwareMonitor). A shortcut with the "run as admin"
-    flag would prompt UAC on every launch. Instead we register a Task Scheduler task with
+    The app manifest is asInvoker, but it needs administrator rights to read hardware
+    sensors through LibreHardwareMonitor. Elevation is necessary but not sufficient for the
+    CPU temperature: that one also needs the PawnIO kernel driver, which is installed
+    separately from pawnio.eu (GPU temperature works without it). A shortcut with the
+    "run as admin" flag would prompt UAC on every launch. Instead we register a task with
     RunLevel=Highest and point the shortcut at a hidden launcher (wscript -> schtasks /run).
     Triggering your own task does not require elevation, so there is no UAC prompt.
 
@@ -131,3 +133,7 @@ $b[0x15] = $b[0x15] -band (-bnot 0x20)
 Write-Host ""
 Write-Host "Done. Double-click 'SystemBar Indicator' on the desktop to launch (no UAC prompt)."
 if ($AutoStart) { Write-Host "Auto-start at logon is ENABLED." }
+Write-Host ""
+Write-Host "Note: CPU temperature also needs the PawnIO driver (https://pawnio.eu), installed"
+Write-Host "      separately and only once. Without it CPU temperature reads 0; GPU temperature"
+Write-Host "      and everything else work regardless."
