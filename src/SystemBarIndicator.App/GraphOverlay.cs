@@ -61,6 +61,7 @@ namespace SystemBarIndicator
                 new ChartConfig { Title = "RAM", LineColor = Color.FromArgb(129, 140, 248), GetValue = p => p.RamUsage, FormatValue = d => string.Format("{0:F0}%", d.RamUsage), MaxDefault = 100, ShowOnlyIfPositive = false, IsEnabled = s => s.ShowRam },
                 new ChartConfig { Title = "GPU", LineColor = Color.FromArgb(72, 187, 120), GetValue = p => p.GpuUsage, FormatValue = d => string.Format("{0:F0}%", d.GpuUsage), MaxDefault = 100, ShowOnlyIfPositive = true, IsEnabled = s => s.ShowGpu },
                 new ChartConfig { Title = "GPU Temp", LineColor = Color.FromArgb(255, 167, 38), GetValue = p => p.GpuTemperature, FormatValue = d => FormatTemp(d.GpuTemperature), MaxDefault = 100, ShowOnlyIfPositive = true, IsEnabled = s => s.ShowGpuTemp },
+                new ChartConfig { Title = "VRAM Temp", LineColor = Color.FromArgb(255, 213, 79), GetValue = p => p.GpuVramTemperature, FormatValue = d => FormatTemp(d.GpuVramTemperature), MaxDefault = 100, ShowOnlyIfPositive = true, IsEnabled = s => s.ShowGpuVramTemp },
                 new ChartConfig { Title = "Disk R/W", LineColor = Color.FromArgb(171, 71, 188), GetValue = p => p.DiskRead + p.DiskWrite, FormatValue = d => string.Format("{0:F0} / {1:F0} MB", d.DiskRead, d.DiskWrite), MaxDefault = 500, ShowOnlyIfPositive = false, IsEnabled = s => s.ShowDisk },
                 new ChartConfig { Title = "Net DL", LineColor = Color.FromArgb(237, 137, 54), GetValue = p => p.NetDown, FormatValue = d => FormatSpeed(d.NetDown), MaxDefault = 10000, ShowOnlyIfPositive = false, IsEnabled = s => s.ShowNetwork },
                 new ChartConfig { Title = "Net UL", LineColor = Color.FromArgb(38, 198, 218), GetValue = p => p.NetUp, FormatValue = d => FormatSpeed(d.NetUp), MaxDefault = 10000, ShowOnlyIfPositive = false, IsEnabled = s => s.ShowNetwork }
@@ -113,7 +114,10 @@ namespace SystemBarIndicator
         {
             int visibleCharts = GetVisibleChartCount(_history.GetPoints());
             int totalHeight = OuterPadding * 2 + visibleCharts * ChartHeight + Math.Max(visibleCharts - 1, 0) * Gap;
-            this.Size = new Size(Math.Max(_parentForm.Width, MinWidth), Math.Min(totalHeight, 650));
+            // Capped by the screen, not a constant: all nine charts already exceed the old
+            // fixed 650 px, and the constant would silently clip the last one.
+            int maxHeight = Screen.FromRectangle(_parentForm.Bounds).WorkingArea.Height;
+            this.Size = new Size(Math.Max(_parentForm.Width, MinWidth), Math.Min(totalHeight, maxHeight));
         }
 
         private bool IsChartVisible(ChartConfig chart, List<DataPoint> data) =>

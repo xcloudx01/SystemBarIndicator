@@ -55,6 +55,7 @@ namespace SystemBarIndicator.Tests
                 ShowRam = false,
                 ShowGpu = false,
                 ShowGpuTemp = false,
+                ShowGpuVramTemp = false,
                 ShowDisk = false,
                 ShowNetwork = true
             };
@@ -76,6 +77,7 @@ namespace SystemBarIndicator.Tests
             Assert.False(loaded.ShowRam);
             Assert.False(loaded.ShowGpu);
             Assert.False(loaded.ShowGpuTemp);
+            Assert.False(loaded.ShowGpuVramTemp);
             Assert.False(loaded.ShowDisk);
             Assert.True(loaded.ShowNetwork);
         }
@@ -86,6 +88,7 @@ namespace SystemBarIndicator.Tests
         [InlineData(nameof(AppSettings.ShowRam))]
         [InlineData(nameof(AppSettings.ShowGpu))]
         [InlineData(nameof(AppSettings.ShowGpuTemp))]
+        [InlineData(nameof(AppSettings.ShowGpuVramTemp))]
         [InlineData(nameof(AppSettings.ShowDisk))]
         [InlineData(nameof(AppSettings.ShowNetwork))]
         public void Save_WritesEverySectionFlag(string propertyName)

@@ -85,6 +85,7 @@ namespace SystemBarIndicator.Tests
                 ShowRam = false,
                 ShowGpu = false,
                 ShowGpuTemp = false,
+                ShowGpuVramTemp = false,
                 ShowDisk = false,
                 ShowNetwork = false
             }.Normalized();
@@ -146,6 +147,7 @@ namespace SystemBarIndicator.Tests
                 ShowRam = false,
                 ShowGpu = false,
                 ShowGpuTemp = false,
+                ShowGpuVramTemp = false,
                 ShowDisk = false,
                 ShowNetwork = true
             };
@@ -166,6 +168,7 @@ namespace SystemBarIndicator.Tests
             Assert.Equal(source.ShowRam, copy.ShowRam);
             Assert.Equal(source.ShowGpu, copy.ShowGpu);
             Assert.Equal(source.ShowGpuTemp, copy.ShowGpuTemp);
+            Assert.Equal(source.ShowGpuVramTemp, copy.ShowGpuVramTemp);
             Assert.Equal(source.ShowDisk, copy.ShowDisk);
             Assert.Equal(source.ShowNetwork, copy.ShowNetwork);
         }

@@ -19,7 +19,7 @@ auto-scaled to recent peaks.
 
 Click the bar and it unfolds into the history overlay, covering roughly the last two minutes:
 
-<img src="docs/graphs.png" alt="The history overlay above the bar: eight charts for CPU, CPU temperature, RAM, GPU, GPU temperature, disk read/write and network download/upload" width="420">
+<img src="docs/graphs.png" alt="The history overlay above the bar: charts for CPU, CPU temperature, RAM, GPU, GPU temperature, VRAM temperature, disk read/write and network download/upload" width="420">
 
 The overlay tracks the bar — it follows it around the screen, shows only the sections you
 have enabled, and opens downwards instead of upwards if you drag the bar to the top half of
@@ -29,11 +29,12 @@ the screen.
 
 - **CPU** — total load and temperature
 - **RAM** — memory usage
-- **GPU** — load and temperature (NVIDIA / AMD / Intel)
+- **GPU** — load, temperature and VRAM temperature (NVIDIA / AMD / Intel; VRAM where the
+  card exposes a memory sensor)
 - **Disk** — read/write throughput as a smoothed dual bar
 - **Network** — download/upload throughput as a smoothed dual bar
-- **Graph overlay** — click the bar for eight history charts (CPU, CPU temp, RAM, GPU,
-  GPU temp, disk R/W, net down, net up) over the last ~120 samples
+- **Graph overlay** — click the bar for nine history charts (CPU, CPU temp, RAM, GPU,
+  GPU temp, VRAM temp, disk R/W, net down, net up) over the last ~120 samples
 - **Load colouring** — values change colour as load crosses the warning/critical thresholds
 - **Always on top** — the bar keeps its z-order above the taskbar
 - **Tray icon** — shows `CPU / RAM / GPU` in the tooltip, with a context menu

@@ -172,6 +172,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
         private bool _hasCpuTemp;
         private bool _hasGpu;
         private bool _hasGpuTemp;
+        private bool _hasGpuVramTemp;
 
         private int _pendingBarWidth; // 0 means no width adjustment is scheduled
 
@@ -189,6 +190,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
         public bool HasCpuTempSensor => _hasCpuTemp;
         public bool HasGpuSensor => _hasGpu;
         public bool HasGpuTempSensor => _hasGpuTemp;
+        public bool HasGpuVramTempSensor => _hasGpuVramTemp;
 
         private SensorData GetCurrentData() => _current;
 
@@ -414,6 +416,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
                     _current.CpuTemperature = _hardwareSensor.GetCpuTemperature() ?? 0f;
                     _current.GpuUsage = _hardwareSensor.GetGpuUsage() ?? 0f;
                     _current.GpuTemperature = _hardwareSensor.GetGpuTemperature() ?? 0f;
+                    _current.GpuVramTemperature = _hardwareSensor.GetGpuVramTemperature() ?? 0f;
 
                     var gpuMem = _hardwareSensor.GetGpuMemory();
                     if (gpuMem.HasValue)
@@ -426,6 +429,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
                 _hasCpuTemp |= _current.CpuTemperature > 0f;
                 _hasGpu |= _current.GpuUsage > 0f || _current.GpuTemperature > 0f;
                 _hasGpuTemp |= _current.GpuTemperature > 0f;
+                _hasGpuVramTemp |= _current.GpuVramTemperature > 0f;
 
                 var ram = _ramSensor.GetInfo();
                 _current.RamUsage = ram.usagePercent;
@@ -468,6 +472,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
                     CpuTemperature = _current.CpuTemperature,
                     GpuUsage = _current.GpuUsage,
                     GpuTemperature = _current.GpuTemperature,
+                    GpuVramTemperature = _current.GpuVramTemperature,
                     RamUsage = _current.RamUsage,
                     DiskRead = _current.DiskRead,
                     DiskWrite = _current.DiskWrite,
@@ -739,7 +744,8 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
 
             bool gpu = s.ShowGpu && _hasGpu;
             bool gpuTemp = s.ShowGpuTemp && _hasGpuTemp;
-            if (gpu || gpuTemp)
+            bool vramTemp = s.ShowGpuVramTemp && _hasGpuVramTemp;
+            if (gpu || gpuTemp || vramTemp)
             {
                 x = Separate(g, x, y, lineHeight, ref anyDrawn);
                 if (gpu)
@@ -751,6 +757,16 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
                 if (gpuTemp)
                 {
                     x = DrawTemp(g, _current.GpuTemperature, x, y, lineHeight);
+                    x += TempGap;
+                    trailingGap = TempGap;
+                }
+                if (vramTemp)
+                {
+                    // Labelled like a section: a second bare temperature next to the GPU
+                    // one would be unreadable.
+                    g.DrawString("VRAM", _theme.SmallFont, _theme.Dim, x, y);
+                    x += (int)g.MeasureString("VRAM", _theme.SmallFont).Width + 2;
+                    x = DrawTemp(g, _current.GpuVramTemperature, x, y, lineHeight);
                     x += TempGap;
                     trailingGap = TempGap;
                 }

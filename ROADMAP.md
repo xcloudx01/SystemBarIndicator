@@ -5,11 +5,11 @@ they are the things most likely to be picked up, in roughly that order.
 
 ## Done
 
-- Taskbar bar with CPU, RAM, GPU, disk and network sections, plus CPU/GPU temperature
+- Taskbar bar with CPU, RAM, GPU, disk and network sections, plus CPU/GPU/VRAM temperature
 - Fixed-width value slots and availability latches, so the layout never jumps when a value
   changes width or a sensor drops out for a tick
 - Content-driven bar width, measured per frame (correct under PerMonitorV2 DPI)
-- History overlay with eight charts over the last ~120 samples
+- History overlay with nine charts over the last ~120 samples
 - Smoothed disk/network dual bars — EMA plus an auto-scaling full-scale value, recalibrated
   when the poll interval changes
 - Tray icon with tooltip and context menu

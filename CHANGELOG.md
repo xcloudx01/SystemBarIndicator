@@ -7,6 +7,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- VRAM temperature: shown in the bar next to the GPU temperature (under a dim `VRAM`
+  label), as a ninth chart in the history overlay, and as its own section checkbox in the
+  settings. Available where LibreHardwareMonitor exposes a GPU memory temperature sensor
+  (NVIDIA "GPU Memory Junction", AMD "GPU Memory"); hidden otherwise.
+
 ## [1.0.0] - 2026-08-10
 
 First public release. The feature set below grew over the project's private history; the

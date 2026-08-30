@@ -31,6 +31,7 @@ namespace SystemBarIndicator
         private readonly CheckBox _showRam = new();
         private readonly CheckBox _showGpu = new();
         private readonly CheckBox _showGpuTemp = new();
+        private readonly CheckBox _showGpuVramTemp = new();
         private readonly CheckBox _showDisk = new();
         private readonly CheckBox _showNetwork = new();
 
@@ -115,6 +116,7 @@ namespace SystemBarIndicator
             SetUpCheck(_showGpuTemp, "GPU temperature", new Rectangle(14, 76, 160, 22), _owner.HasGpuTempSensor, box);
             SetUpCheck(_showDisk, "Disk", new Rectangle(180, 76, 165, 22), available: true, box);
             SetUpCheck(_showNetwork, "Network", new Rectangle(14, 102, 160, 22), available: true, box);
+            SetUpCheck(_showGpuVramTemp, "VRAM temperature", new Rectangle(180, 102, 165, 22), _owner.HasGpuVramTempSensor, box);
 
             Controls.Add(box);
         }
@@ -191,6 +193,7 @@ namespace SystemBarIndicator
                 _showRam.Checked = s.ShowRam;
                 _showGpu.Checked = s.ShowGpu;
                 _showGpuTemp.Checked = s.ShowGpuTemp;
+                _showGpuVramTemp.Checked = s.ShowGpuVramTemp;
                 _showDisk.Checked = s.ShowDisk;
                 _showNetwork.Checked = s.ShowNetwork;
 
@@ -245,6 +248,7 @@ namespace SystemBarIndicator
             s.ShowRam = _showRam.Checked;
             s.ShowGpu = _showGpu.Checked;
             s.ShowGpuTemp = _showGpuTemp.Checked;
+            s.ShowGpuVramTemp = _showGpuVramTemp.Checked;
             s.ShowDisk = _showDisk.Checked;
             s.ShowNetwork = _showNetwork.Checked;
             s.UpdateIntervalMs = _interval.SelectedIndex >= 0

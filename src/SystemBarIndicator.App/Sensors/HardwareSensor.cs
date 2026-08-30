@@ -53,10 +53,24 @@ namespace SystemBarIndicator.Sensors
 
         public float? GetGpuTemperature()
         {
+            var temps = _computer.Hardware
+                .Where(h => h.HardwareType == HardwareType.GpuNvidia || h.HardwareType == HardwareType.GpuAmd || h.HardwareType == HardwareType.GpuIntel)
+                .SelectMany(h => h.Sensors)
+                .Where(s => s.SensorType == SensorType.Temperature);
+
+            // Prefer the core sensor and never fall back to a memory one — on cards that
+            // enumerate the VRAM sensor first this would duplicate GetGpuVramTemperature().
+            return GetFirstValue(temps.Where(s => s.Name.Contains("Core")))
+                ?? GetFirstValue(temps.Where(s => !s.Name.Contains("Memory")));
+        }
+
+        /// <summary>VRAM temperature: "GPU Memory Junction" on NVIDIA, "GPU Memory" on AMD.</summary>
+        public float? GetGpuVramTemperature()
+        {
             return GetFirstValue(_computer.Hardware
                 .Where(h => h.HardwareType == HardwareType.GpuNvidia || h.HardwareType == HardwareType.GpuAmd || h.HardwareType == HardwareType.GpuIntel)
                 .SelectMany(h => h.Sensors)
-                .Where(s => s.SensorType == SensorType.Temperature));
+                .Where(s => s.SensorType == SensorType.Temperature && s.Name.Contains("Memory")));
         }
 
         public (float? used, float? total)? GetGpuMemory()
