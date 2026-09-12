@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-12
+
 ### Added
 
 - VRAM usage: how full the video memory is, as a percentage in the bar in front of the VRAM
@@ -94,7 +96,8 @@ individual steps are in the commit log.
 - Unit tests covering all of `Core`; CI builds and tests on `windows-latest` with warnings
   as errors.
 
-[Unreleased]: https://github.com/coldneuro/SystemBarIndicator/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/coldneuro/SystemBarIndicator/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/coldneuro/SystemBarIndicator/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/coldneuro/SystemBarIndicator/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/coldneuro/SystemBarIndicator/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/coldneuro/SystemBarIndicator/releases/tag/v1.0.0
