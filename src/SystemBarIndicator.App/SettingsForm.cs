@@ -31,6 +31,7 @@ namespace SystemBarIndicator
         private readonly CheckBox _showRam = new();
         private readonly CheckBox _showGpu = new();
         private readonly CheckBox _showGpuTemp = new();
+        private readonly CheckBox _showGpuVramUsage = new();
         private readonly CheckBox _showGpuVramTemp = new();
         private readonly CheckBox _showDisk = new();
         private readonly CheckBox _showNetwork = new();
@@ -53,7 +54,7 @@ namespace SystemBarIndicator
             MinimizeBox = false;
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(380, 488);
+            ClientSize = new Size(380, 514);
 
             BuildAppearanceGroup();
             BuildSectionsGroup();
@@ -108,16 +109,18 @@ namespace SystemBarIndicator
 
         private void BuildSectionsGroup()
         {
-            var box = new GroupBox { Text = "Sections", Bounds = new Rectangle(12, 174, 356, 130) };
+            var box = new GroupBox { Text = "Sections", Bounds = new Rectangle(12, 174, 356, 156) };
 
+            // Listed in the order the sections appear in the bar.
             SetUpCheck(_showCpu, "CPU", new Rectangle(14, 24, 160, 22), available: true, box);
             SetUpCheck(_showCpuTemp, "CPU temperature", new Rectangle(180, 24, 165, 22), _owner.HasCpuTempSensor, box);
             SetUpCheck(_showRam, "RAM", new Rectangle(14, 50, 160, 22), available: true, box);
             SetUpCheck(_showGpu, "GPU", new Rectangle(180, 50, 165, 22), _owner.HasGpuSensor, box);
             SetUpCheck(_showGpuTemp, "GPU temperature", new Rectangle(14, 76, 160, 22), _owner.HasGpuTempSensor, box);
-            SetUpCheck(_showDisk, "Disk", new Rectangle(180, 76, 165, 22), _owner.HasDiskSensor, box);
-            SetUpCheck(_showNetwork, "Network", new Rectangle(14, 102, 160, 22), available: true, box);
-            SetUpCheck(_showGpuVramTemp, "VRAM temperature", new Rectangle(180, 102, 165, 22), _owner.HasGpuVramTempSensor, box);
+            SetUpCheck(_showGpuVramUsage, "VRAM usage", new Rectangle(180, 76, 165, 22), _owner.HasGpuVramUsageSensor, box);
+            SetUpCheck(_showGpuVramTemp, "VRAM temperature", new Rectangle(14, 102, 160, 22), _owner.HasGpuVramTempSensor, box);
+            SetUpCheck(_showDisk, "Disk", new Rectangle(180, 102, 165, 22), _owner.HasDiskSensor, box);
+            SetUpCheck(_showNetwork, "Network", new Rectangle(14, 128, 160, 22), available: true, box);
 
             Controls.Add(box);
         }
@@ -137,7 +140,7 @@ namespace SystemBarIndicator
 
         private void BuildOtherGroup()
         {
-            var box = new GroupBox { Text = "Behaviour", Bounds = new Rectangle(12, 312, 356, 118) };
+            var box = new GroupBox { Text = "Behaviour", Bounds = new Rectangle(12, 338, 356, 118) };
 
             box.Controls.Add(new Label { Text = "Update every:", Bounds = new Rectangle(12, 28, 100, 20) });
             _interval.Bounds = new Rectangle(118, 24, 100, 24);
@@ -164,11 +167,11 @@ namespace SystemBarIndicator
 
         private void BuildButtons()
         {
-            var defaults = new Button { Text = "Defaults", Bounds = new Rectangle(12, 440, 100, 30) };
+            var defaults = new Button { Text = "Defaults", Bounds = new Rectangle(12, 466, 100, 30) };
             defaults.Click += (s, e) => LoadFromSettings(new AppSettings(), apply: true);
             Controls.Add(defaults);
 
-            var close = new Button { Text = "Close", Bounds = new Rectangle(268, 440, 100, 30) };
+            var close = new Button { Text = "Close", Bounds = new Rectangle(268, 466, 100, 30) };
             close.Click += (s, e) => Close();
             Controls.Add(close);
             AcceptButton = close;
@@ -200,6 +203,7 @@ namespace SystemBarIndicator
                 _showRam.Checked = s.ShowRam;
                 _showGpu.Checked = s.ShowGpu;
                 _showGpuTemp.Checked = s.ShowGpuTemp;
+                _showGpuVramUsage.Checked = s.ShowGpuVramUsage;
                 _showGpuVramTemp.Checked = s.ShowGpuVramTemp;
                 _showDisk.Checked = s.ShowDisk;
                 _showNetwork.Checked = s.ShowNetwork;
@@ -256,6 +260,7 @@ namespace SystemBarIndicator
             s.ShowRam = _showRam.Checked;
             s.ShowGpu = _showGpu.Checked;
             s.ShowGpuTemp = _showGpuTemp.Checked;
+            s.ShowGpuVramUsage = _showGpuVramUsage.Checked;
             s.ShowGpuVramTemp = _showGpuVramTemp.Checked;
             s.ShowDisk = _showDisk.Checked;
             s.ShowNetwork = _showNetwork.Checked;

@@ -7,6 +7,7 @@ namespace SystemBarIndicator.Models
         public float GpuUsage { get; set; }
         public float GpuTemperature { get; set; }
         public float GpuVramTemperature { get; set; }
+        public float GpuVramUsage { get; set; }
         public float GpuMemoryUsed { get; set; }
         public float GpuMemoryTotal { get; set; }
         public float RamUsage { get; set; }

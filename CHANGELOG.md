@@ -7,6 +7,19 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- VRAM usage: how full the video memory is, as a percentage in the bar in front of the VRAM
+  temperature (`VRAM 31% 56C`), as a tenth chart in the history overlay, and as its own
+  section checkbox in the settings. Read straight from the card where it is reported that
+  way, derived from the used/total pair otherwise, and hidden where neither is available.
+
+### Fixed
+
+- GPU load could be read off a memory sensor on a card that does not enumerate "GPU Core"
+  first: "GPU Memory" is how full the VRAM is and "GPU Memory Controller" is the load on the
+  memory bus, and neither is the load of the GPU itself.
+
 ## [1.1.1] - 2026-08-31
 
 ### Added

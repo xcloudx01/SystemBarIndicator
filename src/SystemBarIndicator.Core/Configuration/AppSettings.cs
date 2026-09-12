@@ -62,6 +62,7 @@ namespace SystemBarIndicator.Configuration
         public bool ShowRam { get; set; } = true;
         public bool ShowGpu { get; set; } = true;
         public bool ShowGpuTemp { get; set; } = true;
+        public bool ShowGpuVramUsage { get; set; } = true;
         public bool ShowGpuVramTemp { get; set; } = true;
         public bool ShowDisk { get; set; } = true;
         public bool ShowNetwork { get; set; } = true;
@@ -109,7 +110,7 @@ namespace SystemBarIndicator.Configuration
 
             // A completely empty bar cannot be grabbed with the mouse — keep at least CPU.
             if (!s.ShowCpu && !s.ShowRam && !s.ShowGpu && !s.ShowDisk && !s.ShowNetwork &&
-                !s.ShowCpuTemp && !s.ShowGpuTemp && !s.ShowGpuVramTemp)
+                !s.ShowCpuTemp && !s.ShowGpuTemp && !s.ShowGpuVramUsage && !s.ShowGpuVramTemp)
             {
                 s.ShowCpu = true;
             }
@@ -152,6 +153,7 @@ namespace SystemBarIndicator.Configuration
             ShowRam = ShowRam,
             ShowGpu = ShowGpu,
             ShowGpuTemp = ShowGpuTemp,
+            ShowGpuVramUsage = ShowGpuVramUsage,
             ShowGpuVramTemp = ShowGpuVramTemp,
             ShowDisk = ShowDisk,
             ShowNetwork = ShowNetwork

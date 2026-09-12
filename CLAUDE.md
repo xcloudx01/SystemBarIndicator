@@ -5,7 +5,7 @@ Guidance for working in this repository.
 ## Overview
 
 SystemBar Indicator — a small Windows 11 tray/taskbar system monitor (CPU, RAM, GPU,
-disk, network usage + CPU/GPU/VRAM temperature) with a pop-up history-graph overlay.
+VRAM, disk, network usage + CPU/GPU/VRAM temperature) with a pop-up history-graph overlay.
 WinForms + GDI+ on .NET 10. Hardware temperatures via LibreHardwareMonitorLib.
 
 ## Solution layout
@@ -15,7 +15,7 @@ SystemBarIndicator.sln
 ├── src/
 │   ├── SystemBarIndicator.Core/   # net10.0 — platform-independent core (no WinForms)
 │   │   ├── Models/                #   SensorData, DataPoint, DataHistory
-│   │   ├── Monitoring/            #   LoadLevel + thresholds (LoadLevels)
+│   │   ├── Monitoring/            #   LoadLevel + thresholds, CpuLoad, VramLoad
 │   │   ├── Configuration/         #   AppSettings, SettingsStore, WindowPlacement, ColorCodec
 │   │   ├── Updates/               #   UpdateVersion, UpdateAssets, ReleaseChecksums
 │   │   └── Util/                  #   Formatting, Ema, AutoScale, SmoothingRates
@@ -53,6 +53,15 @@ dotnet run --project src/SystemBarIndicator.App   # run the app
   so the idle-vs-total guards must come before the subtraction), and `DiskSensor` latches
   `Available = false`, which hides the section instead of drawing an idle-looking disk. Both
   log once, not once per tick.
+- **GPU sensor names.** LibreHardwareMonitor files several different numbers under similar
+  names, so the pickers in `HardwareSensor` compare names **exactly** where it matters:
+  `GPU Memory` (a `Load` sensor) is how full the VRAM is, `GPU Memory Controller` is the
+  load on the memory bus, and `GPU Core` is the load of the GPU itself. Same for the
+  used/total pair — a `Contains("D3D")` test also matches `D3D Shared Memory Used`, which is
+  system RAM lent to the GPU rather than video memory. Nothing guarantees the order in which
+  sensors are enumerated, so a loose match silently takes whichever happens to come last.
+  Cards that report no ready-made VRAM percentage fall back to `VramLoad.Percent` (Core,
+  covered by tests) over that pair.
 - **Polling.** `MainForm._timer` (1 s) refreshes a single `SensorData _current` snapshot
   through the `Sensors` classes, then pushes a point into `DataHistory` (a 120-point ring
   buffer). `HardwareSensor.Update()` must be called once per tick — without it LHM returns

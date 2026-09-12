@@ -7,20 +7,21 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6)](#requirements)
 
 A small always-on-top system monitor that sits on the Windows 11 taskbar. It shows live
-CPU, RAM, GPU, disk and network load plus CPU/GPU/VRAM temperature, keeps itself up to
+CPU, RAM, GPU, VRAM, disk and network load plus CPU/GPU/VRAM temperature, keeps itself up to
 date from GitHub Releases, and expands into a history-graph overlay when you click it.
 
-![The bar sitting on the taskbar: CPU load and temperature, RAM, GPU load and temperature, then disk and network activity bars](docs/bar.png)
+![The bar sitting on the taskbar: CPU load and temperature, RAM, GPU load and temperature, VRAM usage and temperature, then disk and network activity bars](docs/bar.png)
 
-Reading left to right: CPU load and temperature, RAM usage, GPU load and temperature, then
-disk (`D`) and network (`N`). Each number lives in a fixed-width slot, so nothing shifts
-sideways as values change, and the colour follows the load level. Disk and network are drawn
+Reading left to right: CPU load and temperature, RAM usage, GPU load and temperature, how
+full the video memory is and how hot it runs, then disk (`D`) and network (`N`). Each number
+lives in a fixed-width slot, so nothing shifts sideways as values change, and the colour
+follows the load level. Disk and network are drawn
 as a pair of bars rather than numbers — ▼ is read/download, ▲ is write/upload — smoothed and
 auto-scaled to recent peaks.
 
 Click the bar and it unfolds into the history overlay, covering roughly the last two minutes:
 
-<img src="docs/graphs.png" alt="The history overlay above the bar: charts for CPU, CPU temperature, RAM, GPU, GPU temperature, VRAM temperature, disk read/write and network download/upload" width="420">
+<img src="docs/graphs.png" alt="The history overlay above the bar: charts for CPU, CPU temperature, RAM, GPU, GPU temperature, VRAM usage, VRAM temperature, disk read/write and network download/upload" width="420">
 
 The overlay tracks the bar — it follows it around the screen, shows only the sections you
 have enabled, and opens downwards instead of upwards if you drag the bar to the top half of
@@ -30,12 +31,13 @@ the screen.
 
 - **CPU** — total load and temperature
 - **RAM** — memory usage
-- **GPU** — load, temperature and VRAM temperature (NVIDIA / AMD / Intel; VRAM where the
-  card exposes a memory sensor)
+- **GPU** — load and temperature (NVIDIA / AMD / Intel)
+- **VRAM** — how full the video memory is, plus its temperature, where the card exposes
+  those sensors
 - **Disk** — read/write throughput as a smoothed dual bar
 - **Network** — download/upload throughput as a smoothed dual bar
-- **Graph overlay** — click the bar for nine history charts (CPU, CPU temp, RAM, GPU,
-  GPU temp, VRAM temp, disk R/W, net down, net up) over the last ~120 samples
+- **Graph overlay** — click the bar for ten history charts (CPU, CPU temp, RAM, GPU,
+  GPU temp, VRAM, VRAM temp, disk R/W, net down, net up) over the last ~120 samples
 - **Load colouring** — values change colour as load crosses the warning/critical thresholds
 - **Always on top** — the bar keeps its z-order above the taskbar
 - **Tray icon** — shows `CPU / RAM / GPU` in the tooltip, with a context menu
@@ -119,7 +121,7 @@ the bar is moved back into the visible area.
 - opacity, 30–100 %
 - theme: dark, light, or a custom background colour
 - font scale, 75–175 %
-- which sections to show: CPU, CPU temp, RAM, GPU, GPU temp, VRAM temp, disk, network
+- which sections to show: CPU, CPU temp, RAM, GPU, GPU temp, VRAM, VRAM temp, disk, network
 - poll interval: 0.5 / 1 / 2 / 5 s — smoothing rates are recalibrated with it
 - temperature in °C or °F
 - automatic update installation on or off

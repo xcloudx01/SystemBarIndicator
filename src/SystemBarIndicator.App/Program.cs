@@ -194,6 +194,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
         private bool _hasGpu;
         private bool _hasGpuTemp;
         private bool _hasGpuVramTemp;
+        private bool _hasGpuVramUsage;
         // Disk works the other way round: it is available until the counters prove otherwise
         // (they can be disabled machine-wide), and it never comes back within a run.
         private bool _diskAvailable;
@@ -215,6 +216,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
         public bool HasGpuSensor => _hasGpu;
         public bool HasGpuTempSensor => _hasGpuTemp;
         public bool HasGpuVramTempSensor => _hasGpuVramTemp;
+        public bool HasGpuVramUsageSensor => _hasGpuVramUsage;
         public bool HasDiskSensor => _diskAvailable;
 
         private SensorData GetCurrentData() => _current;
@@ -503,6 +505,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
                     _current.GpuUsage = _hardwareSensor.GetGpuUsage() ?? 0f;
                     _current.GpuTemperature = _hardwareSensor.GetGpuTemperature() ?? 0f;
                     _current.GpuVramTemperature = _hardwareSensor.GetGpuVramTemperature() ?? 0f;
+                    _current.GpuVramUsage = _hardwareSensor.GetGpuVramUsage() ?? 0f;
 
                     var gpuMem = _hardwareSensor.GetGpuMemory();
                     if (gpuMem.HasValue)
@@ -516,6 +519,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
                 _hasGpu |= _current.GpuUsage > 0f || _current.GpuTemperature > 0f;
                 _hasGpuTemp |= _current.GpuTemperature > 0f;
                 _hasGpuVramTemp |= _current.GpuVramTemperature > 0f;
+                _hasGpuVramUsage |= _current.GpuVramUsage > 0f;
 
                 var ram = _ramSensor.GetInfo();
                 _current.RamUsage = ram.usagePercent;
@@ -561,6 +565,7 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
                     GpuUsage = _current.GpuUsage,
                     GpuTemperature = _current.GpuTemperature,
                     GpuVramTemperature = _current.GpuVramTemperature,
+                    GpuVramUsage = _current.GpuVramUsage,
                     RamUsage = _current.RamUsage,
                     DiskRead = _current.DiskRead,
                     DiskWrite = _current.DiskWrite,
@@ -930,8 +935,9 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
 
             bool gpu = s.ShowGpu && _hasGpu;
             bool gpuTemp = s.ShowGpuTemp && _hasGpuTemp;
+            bool vramUsage = s.ShowGpuVramUsage && _hasGpuVramUsage;
             bool vramTemp = s.ShowGpuVramTemp && _hasGpuVramTemp;
-            if (gpu || gpuTemp || vramTemp)
+            if (gpu || gpuTemp || vramUsage || vramTemp)
             {
                 x = Separate(g, x, y, lineHeight, ref anyDrawn);
                 if (gpu)
@@ -946,15 +952,25 @@ private readonly string _settingsPath = SettingsStore.DefaultPath;
                     x += TempGap;
                     trailingGap = TempGap;
                 }
-                if (vramTemp)
+                if (vramUsage || vramTemp)
                 {
-                    // Labelled like a section: a second bare temperature next to the GPU
-                    // one would be unreadable.
+                    // One "VRAM" label in front of both values: a bare percentage and a bare
+                    // temperature next to the GPU ones would be unreadable.
                     g.DrawString("VRAM", _theme.SmallFont, _theme.Dim, x, y);
                     x += (int)g.MeasureString("VRAM", _theme.SmallFont).Width + 2;
-                    x = DrawTemp(g, _current.GpuVramTemperature, x, y, lineHeight);
-                    x += TempGap;
-                    trailingGap = TempGap;
+                    if (vramUsage)
+                    {
+                        x = DrawValueSlot(g, Formatting.FormatPercent(_current.GpuVramUsage), "100%",
+                            GetLoadBrush(_current.GpuVramUsage / 100f), x, y, lineHeight);
+                        x += ValueGap;
+                        trailingGap = ValueGap;
+                    }
+                    if (vramTemp)
+                    {
+                        x = DrawTemp(g, _current.GpuVramTemperature, x, y, lineHeight);
+                        x += TempGap;
+                        trailingGap = TempGap;
+                    }
                 }
             }
 
