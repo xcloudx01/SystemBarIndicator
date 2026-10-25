@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using SystemBarIndicator.Monitoring;
 
 namespace SystemBarIndicator.Sensors
 {
@@ -20,6 +21,8 @@ namespace SystemBarIndicator.Sensors
         private bool _initialized;
         private bool _disabled;
         private bool _failureLogged;
+        private bool _sourceLogged;
+        private readonly GpuRetryBackoff _retry = new();
 
         [StructLayout(LayoutKind.Sequential)]
         private struct NvmlUtilization
@@ -45,7 +48,7 @@ namespace SystemBarIndicator.Sensors
 
         public float? Read()
         {
-            if (_disabled)
+            if (_disabled || !_retry.CanAttempt(DateTime.UtcNow))
                 return null;
 
             if (_device == IntPtr.Zero && !TryOpen())
@@ -56,23 +59,29 @@ namespace SystemBarIndicator.Sensors
                 int status = _readUtilization!(_device, out var utilization);
                 if (status != 0)
                 {
-                    ReportFailure($"NVML utilization query failed (status {status}); using LibreHardwareMonitor");
+                    RetryLater($"NVML utilization query failed (status {status})");
                     Close();
                     return null;
                 }
 
                 if (utilization.Gpu > 100)
                 {
-                    ReportFailure($"NVML returned invalid GPU usage {utilization.Gpu}; using LibreHardwareMonitor");
+                    RetryLater($"NVML returned invalid GPU usage {utilization.Gpu}");
+                    Close();
                     return null;
                 }
 
-                if (_failureLogged)
+                _retry.OnSuccess();
+                if (!_sourceLogged)
+                {
+                    Logger.Info("GPU core usage source: NVIDIA NVML (one NVIDIA GPU detected)");
+                    _sourceLogged = true;
+                }
+                else if (_failureLogged)
                 {
                     Logger.Info("NVIDIA NVML GPU utilization recovered");
-                    _failureLogged = false;
                 }
-
+                _failureLogged = false;
                 return utilization.Gpu;
             }
             catch (Exception ex) when (ex is SEHException or AccessViolationException)
@@ -110,7 +119,7 @@ namespace SystemBarIndicator.Sensors
                 int status = init();
                 if (status != 0)
                 {
-                    ReportFailure($"NVML initialization failed (status {status}); using LibreHardwareMonitor");
+                    RetryLater($"NVML initialization failed (status {status})");
                     Close();
                     return false;
                 }
@@ -119,7 +128,7 @@ namespace SystemBarIndicator.Sensors
                 status = countDevices(out uint count);
                 if (status != 0)
                 {
-                    ReportFailure($"NVML device enumeration failed (status {status}); using LibreHardwareMonitor");
+                    RetryLater($"NVML device enumeration failed (status {status})");
                     Close();
                     return false;
                 }
@@ -134,12 +143,11 @@ namespace SystemBarIndicator.Sensors
                 status = getHandle(0, out _device);
                 if (status != 0 || _device == IntPtr.Zero)
                 {
-                    ReportFailure($"NVML device handle failed (status {status}); using LibreHardwareMonitor");
+                    RetryLater($"NVML device handle failed (status {status})");
                     Close();
                     return false;
                 }
 
-                Logger.Info("GPU core usage source: NVIDIA NVML (one NVIDIA GPU detected)");
                 return true;
             }
             catch (Exception ex) when (ex is DllNotFoundException or
@@ -154,6 +162,14 @@ namespace SystemBarIndicator.Sensors
 
         private T Export<T>(string name) where T : Delegate =>
             Marshal.GetDelegateForFunctionPointer<T>(NativeLibrary.GetExport(_library, name));
+
+        // Fail over immediately; avoid unloading/reopening NVML at the 0.5-5s poll rate.
+        // Log a failure once until the next valid NVML sample.
+        private void RetryLater(string reason)
+        {
+            _retry.OnFailure(DateTime.UtcNow);
+            ReportFailure($"{reason}; using LibreHardwareMonitor (NVML retry in 30 seconds)");
+        }
 
         private void ReportFailure(string message)
         {
