@@ -58,7 +58,10 @@ dotnet run --project src/SystemBarIndicator.App   # run the app
   `GPU Memory` (a `Load` sensor) is how full the VRAM is, `GPU Memory Controller` is the
   load on the memory bus, and `GPU Core` is the load of the GPU itself.
   NVIDIA GPU-busy percentage now prefers NVML over LHM/NVAPI where exactly one
-  NVIDIA GPU is detected; LHM remains the fallback. NVML index order can differ
+  NVIDIA GPU is detected; LHM remains the fallback. The bar and tray use an
+  explicit validity bit: missing GPU utilization is not a real idle zero.
+  History remains numeric-only and still represents missing samples as zero.
+  NVML index order can differ
   from NVAPI index order, so the NVML path refuses ambiguous multi-NVIDIA cases.
   NVML loads only from the driver's absolute System32/NVSMI paths (the app runs
   elevated). When an integrated AMD/Intel GPU is also present, the sensor order
