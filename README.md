@@ -146,16 +146,17 @@ all.
 
 **NVIDIA GPU core stays at 0% while the card is busy.** The app prefers the NVIDIA
 Management Library (NVML) for GPU-busy percentage and falls back to
-LibreHardwareMonitor's NVAPI sensor if NVML is unavailable. NVML is part of the NVIDIA
-driver; no new application dependency or administrator privilege is required for this
-reading. Test the driver value under a sustained GPU workload with
+LibreHardwareMonitor's NVAPI sensor if NVML cannot provide a reading. NVML ships
+with the NVIDIA driver; no additional package or administrator privilege is
+required for this metric. To compare readings under a sustained workload, run
 `nvidia-smi --query-gpu=name,utilization.gpu --format=csv -l 1`.
-Check `%LOCALAPPDATA%\\SystemBarIndicator\\app.log` for an `NVML` source or fallback
-message. If both telemetry sources are missing, GPU load is marked `n/a` in the
-bar/tray (a genuine idle reading remains `0%`). If NVIDIA reports 0% during real compute
-work, the monitor cannot manufacture
-a nonzero measurement. If multiple NVIDIA cards are installed, NVML is deliberately
-not selected until a stable per-card identity can be established.
+
+Check `%LOCALAPPDATA%\\SystemBarIndicator\\app.log` for the NVML source or
+fallback message. A failed query temporarily uses the existing sensor and
+retries NVML after 30 seconds without spamming logs. If both sources are
+unavailable, the bar/tray displays `n/a`; true idle still displays `0%`.
+The history graph currently records unavailable samples as zero. On systems
+with multiple NVIDIA cards, NVML is not selected without unambiguous mapping.
 
 **The disk section is missing, and `app.log` mentions performance counters.** Windows
 performance counters are unavailable on the machine, so disk throughput cannot be read; the
