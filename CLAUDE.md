@@ -56,7 +56,13 @@ dotnet run --project src/SystemBarIndicator.App   # run the app
 - **GPU sensor names.** LibreHardwareMonitor files several different numbers under similar
   names, so the pickers in `HardwareSensor` compare names **exactly** where it matters:
   `GPU Memory` (a `Load` sensor) is how full the VRAM is, `GPU Memory Controller` is the
-  load on the memory bus, and `GPU Core` is the load of the GPU itself. Same for the
+  load on the memory bus, and `GPU Core` is the load of the GPU itself.
+  NVIDIA GPU-busy percentage now prefers NVML over LHM/NVAPI where exactly one
+  NVIDIA GPU is detected; LHM remains the fallback. NVML index order can differ
+  from NVAPI index order, so the NVML path refuses ambiguous multi-NVIDIA cases.
+  NVML loads only from the driver's absolute System32/NVSMI paths (the app runs
+  elevated). When an integrated AMD/Intel GPU is also present, the sensor order
+  prefers the discrete NVIDIA GPU. Same for the
   used/total pair — a `Contains("D3D")` test also matches `D3D Shared Memory Used`, which is
   system RAM lent to the GPU rather than video memory. Nothing guarantees the order in which
   sensors are enumerated, so a loose match silently takes whichever happens to come last.
