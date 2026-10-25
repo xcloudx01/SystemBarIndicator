@@ -7,6 +7,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- NVIDIA GPU core usage now prefers NVML's GPU-busy percentage rather than relying solely
+  on LibreHardwareMonitor's NVAPI "GPU Core" load sensor, which may stay at 0% on some
+  RTX cards. The existing sensor remains the fallback when NVML is unavailable.
+- The NVML path avoids an unsafe GPU-index assumption on multi-NVIDIA systems, and
+  logs availability/fallback decisions for troubleshooting.
+
 ## [1.2.0] - 2026-09-12
 
 ### Added
