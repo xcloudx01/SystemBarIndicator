@@ -144,6 +144,17 @@ Intel. Install PawnIO once and run the app elevated (option 2 above). GPU temper
 not need it and works without. If the app is not elevated, no temperature is available at
 all.
 
+**NVIDIA GPU core stays at 0% while the card is busy.** The app prefers the NVIDIA
+Management Library (NVML) for GPU-busy percentage and falls back to
+LibreHardwareMonitor's NVAPI sensor if NVML is unavailable. NVML is part of the NVIDIA
+driver; no new application dependency or administrator privilege is required for this
+reading. Test the driver value under a sustained GPU workload with
+`nvidia-smi --query-gpu=name,utilization.gpu --format=csv -l 1`.
+Check `%LOCALAPPDATA%\\SystemBarIndicator\\app.log` for an `NVML` source or fallback
+message. If NVIDIA reports 0% during real compute work, the monitor cannot manufacture
+a nonzero measurement. If multiple NVIDIA cards are installed, NVML is deliberately
+not selected until a stable per-card identity can be established.
+
 **The disk section is missing, and `app.log` mentions performance counters.** Windows
 performance counters are unavailable on the machine, so disk throughput cannot be read; the
 section is hidden rather than drawn as permanently idle, and the settings window marks it
