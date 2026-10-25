@@ -33,7 +33,7 @@ jobs:
       - name: Publish Windows x64
         shell: pwsh
         run: |
-          dotnet publish src/SystemBarIndicator.App/SystemBarIndicator.App.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -p:PublishReadyToRun=true -o dist/win-x64
+          dotnet publish src/SystemBarIndicator.App/SystemBarIndicator.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -p:PublishReadyToRun=true -o dist/win-x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path dist/win-x64/SystemBarIndicator.exe)) { throw 'Compiled Windows .exe is missing' }
           Copy-Item README.md dist/win-x64/README.md
