@@ -151,7 +151,9 @@ driver; no new application dependency or administrator privilege is required for
 reading. Test the driver value under a sustained GPU workload with
 `nvidia-smi --query-gpu=name,utilization.gpu --format=csv -l 1`.
 Check `%LOCALAPPDATA%\\SystemBarIndicator\\app.log` for an `NVML` source or fallback
-message. If NVIDIA reports 0% during real compute work, the monitor cannot manufacture
+message. If both telemetry sources are missing, GPU load is marked `n/a` in the
+bar/tray (a genuine idle reading remains `0%`). If NVIDIA reports 0% during real compute
+work, the monitor cannot manufacture
 a nonzero measurement. If multiple NVIDIA cards are installed, NVML is deliberately
 not selected until a stable per-card identity can be established.
 
