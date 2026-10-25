@@ -13,7 +13,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   on LibreHardwareMonitor's NVAPI "GPU Core" load sensor, which may stay at 0% on some
   RTX cards. The existing sensor remains the fallback when NVML is unavailable.
 - The NVML path avoids an unsafe GPU-index assumption on multi-NVIDIA systems, and
-  logs availability/fallback decisions for troubleshooting.
+  logs bounded retry/fallback and recovery decisions for troubleshooting.
 - Unavailable GPU core telemetry is now shown as `n/a` in the bar and tray, rather than
   a misleading `0%`. A valid idle 0% still appears normally.
 
