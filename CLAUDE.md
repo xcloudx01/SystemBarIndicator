@@ -53,24 +53,21 @@ dotnet run --project src/SystemBarIndicator.App   # run the app
   so the idle-vs-total guards must come before the subtraction), and `DiskSensor` latches
   `Available = false`, which hides the section instead of drawing an idle-looking disk. Both
   log once, not once per tick.
-- **GPU sensor names.** LibreHardwareMonitor files several different numbers under similar
-  names, so the pickers in `HardwareSensor` compare names **exactly** where it matters:
-  `GPU Memory` (a `Load` sensor) is how full the VRAM is, `GPU Memory Controller` is the
-  load on the memory bus, and `GPU Core` is the load of the GPU itself.
-  NVIDIA GPU-busy percentage now prefers NVML over LHM/NVAPI where exactly one
-  NVIDIA GPU is detected; LHM remains the fallback. The bar and tray use an
-  explicit validity bit: missing GPU utilization is not a real idle zero.
-  History remains numeric-only and still represents missing samples as zero.
-  NVML index order can differ
-  from NVAPI index order, so the NVML path refuses ambiguous multi-NVIDIA cases.
-  NVML loads only from the driver's absolute System32/NVSMI paths (the app runs
-  elevated). When an integrated AMD/Intel GPU is also present, the sensor order
-  prefers the discrete NVIDIA GPU. Same for the
-  used/total pair — a `Contains("D3D")` test also matches `D3D Shared Memory Used`, which is
-  system RAM lent to the GPU rather than video memory. Nothing guarantees the order in which
-  sensors are enumerated, so a loose match silently takes whichever happens to come last.
-  Cards that report no ready-made VRAM percentage fall back to `VramLoad.Percent` (Core,
-  covered by tests) over that pair.
+- **GPU sensor names.** LibreHardwareMonitor files different readings under similar
+  names. `GPU Memory` (Load) is VRAM occupancy; `GPU Memory Controller` measures
+  memory-bus activity; `GPU Core` is GPU utilization. Match sensor names exactly
+  to avoid accidentally using the wrong metric. For NVIDIA, GPU utilization
+  prefers NVML's GPU-busy counter when exactly one NVIDIA device is present,
+  and otherwise falls back to LHM/NVAPI. NVML and NVAPI indices are not assumed
+  interchangeable on multi-GPU systems. NVML loads only from absolute
+  System32/NVSMI driver paths because the app may run elevated. Query failures
+  fall back immediately, with a 30-second NVML retry delay and state-transition
+  logging. GPU utilization availability is separate from a genuine idle 0% in
+  bar/tray rendering; the numeric-only history still records unavailable samples
+  as zero. An NVIDIA device is preferred over an integrated AMD/Intel device.
+  For the VRAM used/total pair, matching `D3D` loosely can also capture
+  `D3D Shared Memory Used` (system RAM), so pick the dedicated-memory sensor.
+  Cards without a direct VRAM percentage use `VramLoad.Percent` on the pair.
 - **Polling.** `MainForm._timer` (1 s) refreshes a single `SensorData _current` snapshot
   through the `Sensors` classes, then pushes a point into `DataHistory` (a 120-point ring
   buffer). `HardwareSensor.Update()` must be called once per tick — without it LHM returns
